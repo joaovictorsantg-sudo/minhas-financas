@@ -191,7 +191,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v11 — 24/11';
+const VERSAO='v12 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -769,7 +769,7 @@ const REGRAS=[
  {re:/posto|shell|ipiranga|petrobr|combust|gasolin|ale sat|br mania/i, ids:['gasolina','transp','transporte']},
  {re:/ifood|rappi|mcdonal|burger|pizz|restaur|lanchon|padar|subway|habib|cafe|coffee|starbucks|outback/i, ids:['alim','alimentacao','comida']},
  {re:/supermerc|mercado|assa[ií]|atacad|carrefour|condor|muffato|festval|big\b|hortifr/i, ids:['alim','casa']},
- {re:/uber|99app|99\s*tecnolog|cabify|urbs|onibus|metr[oô]|bilhete/i, ids:['transp','transporte','gasolina']},
+ {re:/uber|99app|99\s*tecnolog|cabify|urbs|onibus|metr[oô]|bilhete|transp\s*colet|estacionament|parkshopping|zona azul|cartao transporte/i, ids:['transp','transporte','gasolina']},
  {re:/netflix|spotify|youtube|prime\s*video|disney|hbo|max\b|crunchyroll|deezer|icloud|apple\.com|google\s*(one|play)|chatgpt|openai/i, ids:['assin','assinaturas']},
  {re:/faculdade|mensalidade|universid|facul|\bfae\b|curso|alura|udemy/i, ids:['faculdade','estudos','educacao']},
  {re:/farmac|drogar|droga\s*raia|pacheco|panvel|nissei|clinic|laborat|hospital/i, ids:['saude']},
@@ -798,12 +798,30 @@ function parseOFX(txt){
     const v=parseFloat(amt.replace(/\./g,m=>'.').replace(',','.'));
     if(!isFinite(v)||v===0)continue;
     out.push({data:d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8),v,
-      desc:limpaDesc(g('MEMO')||g('NAME')),fit:g('FITID')});
+      desc:limpaDesc(g('NAME')||g('MEMO')),fit:g('FITID')});
   }
   return out;
 }
+function dicasOFX(txt){
+  const org=(/<ORG>([^<\r\n]*)/i.exec(txt)||[])[1]||'';
+  const cartao=/<CREDITCARDMSGSRSV1|<CCACCTFROM/i.test(txt);
+  const bal=(/<LEDGERBAL>[\s\S]*?<BALAMT>([^<\r\n]*)/i.exec(txt)||[])[1];
+  const v=bal!=null?numBR(bal):NaN;
+  return {org:org.trim(),cartao,saldo:isFinite(v)?v:null};
+}
+// o que não é gasto nem receita: transferências entre as suas próprias contas
+function natureza(desc){
+  const d=String(desc||'');
+  if(/pagamento.*fatura|fatura.*cart|fatura picpay|fatura inter/i.test(d))return 'fatura';
+  if(/aplica[çc][aã]o|resgate|resgatad|\bcdb\b|tesouro|nota bov|d[ée]bito b3|porq obj|cofrinho/i.test(d))return 'investimento';
+  if(/cr[ée]dito liberado|pix no cr[ée]dito/i.test(d))return 'credito';
+  return '';
+}
+const ROTULO={fatura:'pagamento de fatura',investimento:'aplicação ou resgate',credito:'crédito liberado'};
 function numBR(x){
-  let t=String(x||'').replace(/["']/g,'').replace(/R\$|\s/g,'').trim();
+  // bancos usam − (U+2212) e – no lugar do hífen, e espaço fino antes do valor
+  let t=String(x||'').replace(/[\u2212\u2013\u2014]/g,'-')
+        .replace(/["']/g,'').replace(/R\$|\s|\u00a0|\u202f/g,'').trim();
   if(!t)return NaN;
   const neg=/^-/.test(t)||/\)$/.test(t); t=t.replace(/[()\-]/g,'');
   if(/,\d{1,2}$/.test(t)) t=t.replace(/\./g,'').replace(',','.');
@@ -900,23 +918,44 @@ function parseCSV(txt){
 let imp=null;
 function lerExtrato(inp){
   const f=inp.files&&inp.files[0]; if(!f)return;
-  const fr=new FileReader();
-  fr.onerror=()=>toast('Não deu para abrir o arquivo');
-  fr.onload=()=>{
-    inp.value='';
-    const txt=String(fr.result||'');
-    let itens=/<STMTTRN>/i.test(txt)?parseOFX(txt):parseCSV(txt);
+  inp.value='';
+  const ler=cod=>new Promise((ok,erro)=>{
+    const fr=new FileReader(); fr.onerror=erro;
+    fr.onload=()=>ok(String(fr.result||'')); fr.readAsText(f,cod);
+  });
+  ler('UTF-8').then(t=>{
+    // acentos quebrados indicam arquivo em Latin-1; relê com a outra tabela
+    return /\uFFFD/.test(t)?ler('windows-1252'):t;
+  }).then(txt=>{
+    if(txt.charCodeAt(0)===0xFEFF)txt=txt.slice(1); // marca de ordem de bytes
+    const ehOFX=/<STMTTRN>/i.test(txt);
+    const itens=ehOFX?parseOFX(txt):parseCSV(txt);
     if(!itens.length)return toast('Não encontrei lançamentos nesse arquivo');
     itens.sort((a,b)=>a.data.localeCompare(b.data));
-    const jaTem=new Set(todos().map(t=>t.k).filter(Boolean));
-    const destino=(cfg.cartoes[0]||cfg.contas[0]||{}).id;
-    imp={pg:destino, inv:false, itens:itens.map(t=>{
-      const k=chaveTx(t), dup=jaTem.has(k);
-      return {...t,k,dup,usar:!dup,cat:categorizar(t.desc,t.v>0)};
+    const dicas=ehOFX?dicasOFX(txt):{org:pescaBanco(txt),cartao:false,saldo:null};
+    imp={pg:destinoProvavel(dicas), inv:false, saldo:dicas.saldo, ajusta:dicas.saldo!=null, itens:itens.map(t=>{
+      const k=chaveTx(t), nat=natureza(t.desc);
+      const dup=todos().some(x=>x.k===k);
+      return {...t,k,dup,nat,usar:!dup&&!nat,cat:categorizar(t.desc,t.v>0)};
     })};
     formImportar();
-  };
-  fr.readAsText(f,'ISO-8859-1');
+  }).catch(()=>toast('Não deu para abrir o arquivo'));
+}
+function pescaBanco(txt){
+  // procura o nome de alguma conta ou cartão no corpo do arquivo
+  const t=txt.slice(0,20000).toLowerCase();
+  const nomes=[...cfg.contas,...cfg.cartoes].map(x=>x.nome).filter(n=>n.length>=4);
+  const achou=nomes.find(n=>t.includes(n.toLowerCase()));
+  return achou||'';
+}
+function destinoProvavel({org,cartao}){
+  const lista=cartao?cfg.cartoes:cfg.contas;
+  if(org){ // "Banco Intermedium S/A" casa com a conta chamada Inter
+    const o=org.toLowerCase();
+    const achou=lista.find(x=>x.nome.length>=4&&o.includes(x.nome.toLowerCase()));
+    if(achou)return achou.id;
+  }
+  return (lista[0]||cfg.contas[0]||cfg.cartoes[0]||{}).id;
 }
 const vImp=t=>imp.inv?-t.v:t.v;
 function trocaDestino(){const e=$('#ip_pg');if(e)imp.pg=e.value;formImportar()}
@@ -932,23 +971,28 @@ function formImportar(){
   const ent=marcados.filter(t=>vImp(t)>0), gas=marcados.filter(t=>vImp(t)<0);
   const somaE=r2(ent.reduce((a,t)=>a+vImp(t),0)), somaG=r2(gas.reduce((a,t)=>a-vImp(t),0));
   const todosPos=imp.itens.length>1&&imp.itens.every(t=>vImp(t)>0);
+  const nats=imp.itens.filter(t=>t.nat&&!t.dup).length;
   const opts=[...cfg.cartoes.map(c=>({id:c.id,n:'💳 '+c.nome})),...cfg.contas.map(c=>({id:c.id,n:c.emoji+' '+c.nome}))];
   let h=cab('Importar extrato')+
   `<label>Esses lançamentos são de</label><select id="ip_pg" onchange="trocaDestino()">${opts.map(o=>`<option value="${o.id}" ${imp.pg===o.id?'selected':''}>${o.n}</option>`).join('')}</select>
-  <p class="hint" style="padding-left:0">${imp.itens.length} encontrados${dups?', '+dups+' já estavam lançados':''}. Desmarque o que não quiser.</p>
+  <p class="hint" style="padding-left:0">${imp.itens.length} encontrados${dups?', '+dups+' já estavam lançados':''}${nats?', '+nats+' desmarcados por serem transferência entre suas contas':''}. Marque ou desmarque como quiser.</p>
   <div class="trio" style="grid-template-columns:1fr 1fr;margin-top:4px">
     <div><span class="lbl">Entrando</span><b class="up">${ent.length} ${ent.length===1?'entrada':'entradas'}, ${brl(somaE)}</b></div>
     <div><span class="lbl">Saindo</span><b>${gas.length} ${gas.length===1?'gasto':'gastos'}, ${brl(somaG)}</b></div>
   </div>
   ${todosPos?`<div class="note" style="border-left-color:var(--warn)"><b>Tudo veio positivo</b>Esse banco exporta gasto sem o sinal de menos${ehCartao?', e em cartão positivo vira pagamento de fatura — por isso nada entra':''}. Toque em inverter sinais.</div>`:''}
   <div class="acts"><button class="btn ${todosPos?'':'g'} s" onclick="inverter()">${imp.inv?'Voltar os sinais':'Inverter sinais'}</button></div>
+  ${imp.saldo!=null&&!ehCartao?`<div class="ilin" style="border-bottom:0" onclick="imp.ajusta=!imp.ajusta;formImportar()">
+    <button class="ick" style="${imp.ajusta?'':'background:none;border-color:var(--line2)'}">${imp.ajusta?'✓':''}</button>
+    <div class="imid"><div class="t1">Acertar o saldo pelo extrato</div>
+    <div class="t2">O extrato fecha em ${brl(imp.saldo)}. Marcado, a conta passa a mostrar exatamente isso.</div></div></div>`:''}
   ${!todosPos&&ehCartao&&imp.itens.some(t=>vImp(t)>0)?`<p class="hint" style="padding-left:0">Em cartão, valor positivo é pagamento de fatura e não entra como entrada.</p>`:''}`;
   imp.itens.forEach((t,i)=>{
     const vv=vImp(t), ent=vv>0, pag=ehCartao&&ent;
     h+=`<div class="ilin ${t.usar?'':'off'}">
       <button class="ick" onclick="alterna(${i})" aria-label="${t.usar?'Tirar':'Incluir'}">${t.usar?'✓':''}</button>
       <div class="imid"><div class="t1">${esc(t.desc)}</div>
-        <div class="t2">${dataBR(t.data)}${t.dup?' · já lançado':''}${pag?' · pagamento de fatura':''}</div></div>
+        <div class="t2">${dataBR(t.data)}${t.dup?' · já lançado':''}${t.nat?' · '+ROTULO[t.nat]:''}${pag&&!t.nat?' · pagamento de fatura':''}</div></div>
       <div class="iend"><div class="vmid ${ent?'up':''}">${ent?'+':'−'}${brl(Math.abs(vv))}</div>
         ${!ent||!ehCartao?`<select class="icat" onchange="mudaCat(${i},this.value)">${(ent?RECS:cfg.categorias).map(c=>`<option value="${c.id}" ${t.cat===c.id?'selected':''}>${c.emoji} ${esc(c.nome)}</option>`).join('')}</select>`:''}</div></div>`;
   });
@@ -968,8 +1012,13 @@ function confirmarImport(){
   });
   if(!n){fechar();return toast('Nada marcado para importar')}
   Object.keys(porMes).forEach(k=>{meses[k]=(meses[k]||[]).concat(porMes[k])});
+  let msg=n+(n===1?' lançamento importado':' lançamentos importados');
+  if(imp.saldo!=null&&imp.ajusta&&!ehCartao){
+    const c=conta(imp.pg);
+    if(c){c.saldo=r2((+c.saldo||0)+(imp.saldo-saldoConta(imp.pg)));msg+=', saldo acertado'}
+  }
   cache();imp=null;fechar();render();
-  toast(n+(n===1?' lançamento importado':' lançamentos importados'));
+  toast(msg);
 }
 
 /* ---------- cartões ---------- */
