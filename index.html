@@ -191,7 +191,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v8 — 24/11';
+const VERSAO='v9 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -967,6 +967,58 @@ function formGuardar(id){const o=cfg.objetivos.find(x=>x.id===id);
 function guardar(id,s){const v=num(val('g_v'));if(!(v>0))return toast('Valor inválido');const o=cfg.objetivos.find(x=>x.id===id);
   o.guardado=Math.max(0,r2(o.guardado+s*v));salvarCfg();fechar();toast(s>0?'Guardado':'Retirado')}
 
+
+/* ---------- recomeçar ---------- */
+const RESETS={
+  lanc:{
+    nome:'Apagar os lançamentos',
+    conta:()=>todos().length+(todos().length===1?' lançamento':' lançamentos'),
+    some:'Todo gasto, entrada e aporte que você registrou ou importou.',
+    fica:'Contas, cartões, categorias, investimentos e metas continuam como estão.',
+    faz:()=>{meses={}}
+  },
+  aberturas:{
+    nome:'Zerar o saldo anterior dos cartões',
+    conta:()=>{let n=0,v=0;cfg.cartoes.forEach(c=>Object.values(c.aberturas||{}).forEach(x=>{n++;v+=x}));
+      return n?brl(v)+' em '+n+(n===1?' fatura':' faturas'):'nada'},
+    some:'O valor que eu lancei como já existente nas faturas, antes de você usar o app.',
+    fica:'Seus lançamentos continuam. Faça isso antes de importar o extrato do cartão, senão a fatura conta dobrado.',
+    faz:()=>{cfg.cartoes.forEach(c=>{c.aberturas={}});cfg.faturasPagas={}}
+  },
+  tudo:{
+    nome:'Limpar tudo e começar do zero',
+    conta:()=>'tudo',
+    some:'Lançamentos, contas, cartões, categorias, investimentos, metas e salário.',
+    fica:'Nada. O app volta como se você tivesse acabado de instalar.',
+    faz:()=>{cfg=clone(DEF);meses={};try{localStorage.removeItem(TKKEY)}catch(e){}}
+  }
+};
+function formRecomecar(){
+  abrir(cab('Recomeçar')+
+  `<p class="hint" style="padding-left:0">Não dá para desfazer. Baixe um backup antes se tiver dúvida.</p>
+  <div class="acts"><button class="btn g" onclick="exportar()">Baixar backup antes</button></div>`+
+  Object.keys(RESETS).map(k=>{const r=RESETS[k];
+    return `<div class="panel" style="margin-top:12px"><b style="font-weight:600">${r.nome}</b>
+    <div class="lbl" style="margin-top:4px">Atinge: ${r.conta()}</div>
+    <div class="acts"><button class="btn d s" onclick="confirmaReset('${k}')">Apagar</button></div></div>`}).join('')+
+  `<div class="acts fim"><button class="btn g" onclick="abrirAjustes()">Voltar</button></div>`);
+}
+function confirmaReset(k){
+  const r=RESETS[k];
+  abrir(cab(r.nome)+
+  `<div class="note"><b>Some</b>${r.some}</div>
+  <div class="note" style="border-left-color:var(--up)"><b>Fica</b>${r.fica}</div>
+  <p class="hint" style="padding-left:0">Atinge ${r.conta()}. Não tem como voltar atrás.</p>
+  <div class="acts fim"><button class="btn g" onclick="formRecomecar()">Cancelar</button>
+  <button class="btn d" onclick="fazReset('${k}')">Apagar mesmo assim</button></div>`);
+}
+function fazReset(k){
+  const r=RESETS[k];
+  try{r.faz()}catch(e){return toast('Não deu para apagar')}
+  rasc=null;cache();fechar();st.filtro='';render();
+  toast(k==='tudo'?'App zerado':'Apagado');
+}
+
 /* ---------- ajustes ---------- */
 let rasc=null;
 function abrirAjustes(){rasc=clone(cfg);formAjustes()}
@@ -1009,6 +1061,8 @@ function formAjustes(){
   <div class="acts"><button class="btn g" onclick="exportar()">Baixar backup</button>
   <button class="btn g" onclick="document.getElementById('imp').click()">Restaurar backup</button></div>
   <input type="file" id="imp" style="display:none" onchange="importar(this)">
+  <h4>Recomeçar</h4><p class="hint" style="padding-left:0">Apagar lançamentos, zerar o saldo anterior dos cartões ou limpar tudo.</p>
+  <div class="acts"><button class="btn g" onclick="formRecomecar()">Opções de apagar</button></div>
   <p class="hint" style="text-align:center;padding-top:14px">Versão ${VERSAO}</p>
   <div class="acts fim"><button class="btn g" onclick="fechar()">Cancelar</button><button class="btn" onclick="salvarAjustes()">Salvar</button></div>`;
   abrir(h);

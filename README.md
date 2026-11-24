@@ -53,6 +53,17 @@ confirmar. Escolha no topo se aquele extrato é de uma conta ou de um
 cartão; em cartão, os pagamentos de fatura são ignorados, já que não são
 gastos novos.
 
+## Recomeçar
+
+**Ajustes → Recomeçar** tem três opções, da mais branda à mais radical:
+apagar só os lançamentos, zerar o saldo anterior dos cartões, ou limpar
+tudo. Cada uma mostra antes o que some e o que fica, e nenhuma dá para
+desfazer — baixe um backup se tiver dúvida.
+
+Zerar o saldo anterior é o passo necessário antes de importar o extrato
+de um cartão que já tinha fatura lançada à mão: sem isso, o mesmo gasto
+entra duas vezes.
+
 ## Onde ficam os dados
 
 Tudo no `localStorage` do aparelho. Nada sai dali: não há servidor, conta nem
