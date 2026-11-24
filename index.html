@@ -195,7 +195,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v43 — 24/11';
+const VERSAO='v45 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -455,27 +455,49 @@ function custoAtivo(a){
 const totalInvest=()=>r2(cfg.ativos.reduce((s,a)=>s+valAtivo(a),0));
 const totalCusto=()=>r2(cfg.ativos.reduce((s,a)=>s+custoAtivo(a),0));
 const patrimonio=()=>r2(totalContas()+totalInvest()-totalCartoes());
-// gasto médio por categoria nos últimos meses fechados; o mês corrente fica
-// de fora porque ainda não terminou e puxaria a média para baixo
+// Quanto cada categoria costuma consumir. Dois cuidados: a média é tirada a
+// partir do mês em que a categoria apareceu pela primeira vez, senão quem
+// começou a ser usada agora fica diluída em meses de zero; e o mês corrente
+// entra projetado para o mês inteiro, porque é o que melhor descreve hoje.
 function mediaPorCat(n){
-  const atual=mk(hoje());
-  const ms=Object.keys(meses).filter(k=>k<atual&&(meses[k]||[]).length).sort().slice(-(n||3));
-  const cats={};
-  ms.forEach(k=>(meses[k]||[]).forEach(t=>{if(t.t==='d')cats[t.cat]=(cats[t.cat]||0)+(+t.v||0)}));
-  Object.keys(cats).forEach(k=>{cats[k]=r2(cats[k]/ms.length)});
-  return {ms:ms.length,cats};
+  const atual=mk(hoje()), dm=diasNo(atual), d=Math.max(1,+hoje().slice(8,10));
+  const fech=Object.keys(meses).filter(k=>k<atual&&(meses[k]||[]).length).sort().slice(-(n||6));
+  const gasto={}, visto={};
+  fech.forEach((k,i)=>(meses[k]||[]).forEach(t=>{if(t.t!=='d')return;
+    gasto[t.cat]=gasto[t.cat]||[];gasto[t.cat][i]=(gasto[t.cat][i]||0)+(+t.v||0);
+    if(visto[t.cat]==null)visto[t.cat]=i;}));
+  const hojeCat={};
+  (meses[atual]||[]).forEach(t=>{if(t.t==='d')hojeCat[t.cat]=(hojeCat[t.cat]||0)+(+t.v||0)});
+  const cats={}, proj={};
+  Object.keys(gasto).forEach(k=>{
+    const desde=visto[k], n2=fech.length-desde;
+    let soma=0;for(let i=desde;i<fech.length;i++)soma+=gasto[k][i]||0;
+    cats[k]=r2(soma/Math.max(1,n2));
+  });
+  Object.keys(hojeCat).forEach(k=>{proj[k]=r2(hojeCat[k]*dm/d);if(cats[k]==null)cats[k]=0});
+  return {ms:fech.length,cats,proj,dia:d,dias:dm};
 }
-// reparte o que sobra depois da meta de investir, na proporção do que ele
-// já gasta de verdade. Gastar menos que o disponível não vira licença para
-// gastar mais: nesse caso o orçamento é o próprio histórico.
+// Reparte o que sobra depois da meta de investir. Uma categoria com nome
+// é um compromisso e recebe o que de fato consome; "Outros" é o que sobrou
+// de tudo o que não foi classificado, e fica com o resto em vez de abocanhar
+// o orçamento inteiro só por ser o maior monte.
 function sugereOrc(n){
   const disp=r2((+cfg.salario||0)-(+cfg.metaInvest||0));
-  const {ms,cats}=mediaPorCat(n);
-  const soma=r2(Object.values(cats).reduce((a,b)=>a+b,0));
-  const fator=soma>disp&&soma>0?disp/soma:1;
-  const prop={};
-  Object.keys(cats).forEach(k=>{prop[k]=Math.max(10,Math.round(cats[k]*fator/10)*10)});
-  return {disp,ms,soma,fator,prop,total:r2(Object.values(prop).reduce((a,b)=>a+b,0))};
+  const M=mediaPorCat(n);
+  const dez=v=>Math.max(10,Math.round(v/10)*10);
+  const chaves=Object.keys(M.cats).filter(k=>k!=='outros');
+  // o que cada uma precisa: o costume, nunca abaixo do ritmo deste mês
+  const prec={}; chaves.forEach(k=>{prec[k]=Math.max(M.cats[k]||0,M.proj[k]||0)});
+  const somaN=r2(Object.values(prec).reduce((a,b)=>a+b,0));
+  const fator=somaN>disp&&somaN>0?disp/somaN:1;
+  const prop={}; chaves.forEach(k=>{if(prec[k]>0)prop[k]=dez(prec[k]*fator)});
+  const usado=r2(Object.values(prop).reduce((a,b)=>a+b,0));
+  const sobra=r2(disp-usado);
+  const precOut=Math.max(M.cats.outros||0,M.proj.outros||0);
+  if(precOut>0||sobra>0)prop.outros=Math.max(0,Math.round(Math.min(sobra>0?sobra:0,Math.max(precOut,sobra))/10)*10);
+  if(prop.outros===0)delete prop.outros;
+  return {disp,ms:M.ms,dia:M.dia,dias:M.dias,soma:r2(somaN+precOut),fator,prec,proj:M.proj,
+    prop,total:r2(Object.values(prop).reduce((a,b)=>a+b,0))};
 }
 function ritmo(M){
   const o=orcTotal(),g=resumo(M).desp,hj=hoje(),dm=diasNo(M);
@@ -667,9 +689,22 @@ planos(){
   const cats=[...cfg.categorias];Object.keys(r.porCat).forEach(id=>{if(!cats.find(c=>c.id===id))cats.push({id,...catInfo(id),orc:0})});
   const vis=cats.filter(c=>(+c.orc||0)>0||(r.porCat[c.id]||0)>0);
   if(!vis.length)h+=`<div class="blank">Nenhuma categoria com orçamento.<div style="margin-top:16px"><button class="btn s" onclick="abrirAjustes()">Definir orçamento</button></div></div>`;
+  // orçamento estourado numa categoria não é furo enquanto outra deixou
+  // sobra: o teto que importa é o do mês, não o de cada envelope
+  const comOrc=vis.filter(c=>(+c.orc||0)>0).map(c=>({o:+c.orc,g:r2(r.porCat[c.id]||0)}));
+  const folga=r2(comOrc.reduce((s,x)=>s+Math.max(0,x.o-x.g),0));
+  const excesso=r2(comOrc.reduce((s,x)=>s+Math.max(0,x.g-x.o),0));
+  const coberto=excesso>0&&excesso<=folga, livre=r2(folga-excesso);
+  if(comOrc.length)h+=`<div class="note" style="border-left-color:var(--${excesso>folga?'bad':coberto?'warn':'up'})">
+    <b>${excesso>folga?'Faltam '+brl(r2(excesso-folga)):coberto?brl(excesso)+' cobertos pela sobra':'Sobra livre: '+brl(livre)}</b>
+    ${excesso>folga?'Mesmo usando o que sobrou nas outras categorias, o mês não fecha.'
+      :coberto?'Algumas categorias passaram do planejado, mas outras gastaram menos. Ainda sobram '+brl(livre)+' para o resto do mês.'
+      :'O que não for gasto numa categoria pode ir para qualquer outra.'}</div>`;
   vis.forEach(c=>{const g=r2(r.porCat[c.id]||0),oc=+c.orc||0,resta=r2(oc-g);
     h+=`<div class="env" onclick="st.filtro='${c.id}';ir('lanc')"><div class="top"><span class="nm">${c.emoji} ${esc(c.nome)}</span><span class="vmid">${money(g)}</span>${oc>0?`<span class="lbl">de ${brl(oc)}</span>`:''}</div>
-    ${barra(g,oc)}<div class="sub">${oc<=0?'sem orçamento definido':resta>=0?'Resta '+brl(resta):'<span class="down">Passou '+brl(-resta)+' do planejado</span>'}</div></div>`});
+    ${barra(g,oc)}<div class="sub">${oc<=0?'sem orçamento definido':resta>=0?'Resta '+brl(resta):
+      coberto?'Passou '+brl(-resta)+', coberto pela sobra das outras'
+             :'<span class="down">Passou '+brl(-resta)+' do planejado</span>'}</div></div>`});
   h+=`</div>`;
 
   h+=`<h2>Objetivos<span class="sp"></span><a onclick="formObj()">novo objetivo</a></h2>`;
@@ -1352,15 +1387,16 @@ function formOrcAuto(){
   if(!cfg.salario)return toast('Preencha o salário primeiro, em Ajustes');
   const nomes=k=>{const c=cfg.categorias.find(x=>x.id===k)||catInfo(k);return (c.emoji||'❔')+' '+c.nome};
   abrir(cab('Orçamento sugerido')+
-  `<p class="hint" style="padding-left:0">Do salário de ${brl(cfg.salario)} saem ${brl(cfg.metaInvest)} para investir, então sobram <b>${brl(S.disp)}</b> para gastar. Nos últimos ${S.ms} ${S.ms===1?'mês fechado':'meses fechados'} você gastou ${brl(S.soma)} por mês.</p>
-  ${S.fator<1?`<div class="note" style="border-left-color:var(--warn)"><b>Não cabe</b>Seu gasto médio é maior que o disponível, então reduzi tudo na mesma proporção. Vai exigir cortar de verdade.</div>`
-   :`<div class="note" style="border-left-color:var(--up)"><b>Cabe</b>Seu gasto médio já cabe no disponível, então o orçamento é o seu próprio histórico — não o teto. A diferença vira folga.</div>`}
+  `<p class="hint" style="padding-left:0">Do salário de ${brl(cfg.salario)} saem ${brl(cfg.metaInvest)} para investir, então sobram <b>${brl(S.disp)}</b> para gastar. Olhei ${S.ms} ${S.ms===1?'mês fechado':'meses fechados'} e o ritmo deste mês até o dia ${S.dia}.</p>
+  ${S.fator<1?`<div class="note" style="border-left-color:var(--warn)"><b>Não cabe</b>O que você gasta nas categorias com nome passa do disponível, então reduzi todas na mesma proporção. Vai exigir cortar de verdade.</div>`:''}
   <div class="grp"><div class="rows">`+
-  Object.keys(S.prop).sort((a,b)=>S.prop[b]-S.prop[a]).map(k=>
-    `<div class="row" style="cursor:default"><span class="mid"><span class="t1">${esc(nomes(k))}</span>
-     <span class="t2">gasta ${brl((S.fator<1?S.prop[k]/S.fator:S.prop[k]))} por mês</span></span><span class="end vmid">${brl(S.prop[k])}</span></div>`).join('')+
+  Object.keys(S.prop).sort((a,b)=>(a==='outros'?1:b==='outros'?-1:S.prop[b]-S.prop[a])).map(k=>{
+    const base=k==='outros'?null:r2(S.prec[k]||0);
+    return `<div class="row" style="cursor:default"><span class="mid"><span class="t1">${esc(nomes(k))}</span>
+     <span class="t2">${k==='outros'?'o que sobrou do disponível, para o que não se encaixa nas outras':'costuma consumir '+brl(base)+' por mês'}</span></span><span class="end vmid">${brl(S.prop[k])}</span></div>`}).join('')+
   `</div></div>
   <p class="hint" style="padding-left:0">Total: <b>${brl(S.total)}</b> de ${brl(S.disp)} disponíveis. Dá para ajustar categoria por categoria depois, em Ajustes.</p>
+  ${(S.prop.outros||0)>S.disp*.4?`<div class="note" style="border-left-color:var(--warn)"><b>Boa parte está em Outros</b>São os gastos que o app não soube classificar. Conforme você for categorizando no Extrato, refaça este cálculo e ele fica mais fiel.</div>`:''}
   <div class="acts"><button class="btn g" onclick="fechar()">Cancelar</button>
   <button class="btn p" onclick="aplicaOrcAuto()">Usar esse orçamento</button></div>`);
 }

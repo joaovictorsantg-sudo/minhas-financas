@@ -117,11 +117,15 @@ parar de mexer neles. O banco demora a refletir uma mudança de
 fechamento, e sem isso a correção era desfeita na sincronização seguinte.
 Dá para devolver o controle ao banco na mesma tela.
 
-O orçamento pode ser calculado a partir da meta de investir: o que sobra
-do salário é repartido entre as categorias na proporção do que já se
-gasta nelas. Gastar menos que o disponível não vira licença para gastar
-mais — aí o orçamento é o próprio histórico, e a diferença fica como
-folga.
+O orçamento pode ser calculado a partir da meta de investir. Cada
+categoria com nome recebe o que de fato consome, medido desde o mês em
+que apareceu e nunca abaixo do ritmo do mês corrente; "Outros" fica com o
+resto, em vez de abocanhar o orçamento por ser o maior monte.
+
+Passar do planejado numa categoria não é furo enquanto outra deixou
+sobra: o teto que importa é o do mês. A tela soma a sobra de todas e diz
+se o excesso está coberto, quanto ainda resta livre, ou quanto falta
+quando nem a sobra fecha a conta.
 
 Aporte de dinheiro que o banco já conhece não mexe em saldo nem em
 posição: a conta já foi descontada e o valor já está na posição que vem
