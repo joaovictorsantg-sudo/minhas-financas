@@ -191,7 +191,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v9 — 24/11';
+const VERSAO='v10 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -876,11 +876,18 @@ function alterna(i){imp.itens[i].usar=!imp.itens[i].usar;formImportar()}
 function mudaCat(i,v){imp.itens[i].cat=v}
 function formImportar(){
   const ehCartao=!!cartao(imp.pg);
-  const usados=imp.itens.filter(t=>t.usar).length, dups=imp.itens.filter(t=>t.dup).length;
+  const marcados=imp.itens.filter(t=>t.usar&&!(ehCartao&&t.v>0));
+  const usados=marcados.length, dups=imp.itens.filter(t=>t.dup).length;
+  const ent=marcados.filter(t=>t.v>0), gas=marcados.filter(t=>t.v<0);
+  const somaE=r2(ent.reduce((a,t)=>a+t.v,0)), somaG=r2(gas.reduce((a,t)=>a-t.v,0));
   const opts=[...cfg.cartoes.map(c=>({id:c.id,n:'💳 '+c.nome})),...cfg.contas.map(c=>({id:c.id,n:c.emoji+' '+c.nome}))];
   let h=cab('Importar extrato')+
   `<label>Esses lançamentos são de</label><select id="ip_pg" onchange="trocaDestino()">${opts.map(o=>`<option value="${o.id}" ${imp.pg===o.id?'selected':''}>${o.n}</option>`).join('')}</select>
-  <p class="hint" style="padding-left:0">${imp.itens.length} encontrados${dups?', '+dups+' já estavam lançados':''}. Desmarque o que não quiser.</p>`;
+  <p class="hint" style="padding-left:0">${imp.itens.length} encontrados${dups?', '+dups+' já estavam lançados':''}. Desmarque o que não quiser.</p>
+  <div class="trio" style="grid-template-columns:1fr 1fr;margin-top:4px">
+    <div><span class="lbl">Entrando</span><b class="up">${ent.length} ${ent.length===1?'entrada':'entradas'}, ${brl(somaE)}</b></div>
+    <div><span class="lbl">Saindo</span><b>${gas.length} ${gas.length===1?'gasto':'gastos'}, ${brl(somaG)}</b></div>
+  </div>${ehCartao&&imp.itens.some(t=>t.v>0)?`<p class="hint" style="padding-left:0">Em cartão, valor positivo é pagamento de fatura e não entra como entrada.</p>`:''}`;
   imp.itens.forEach((t,i)=>{
     const ent=t.v>0, pag=ehCartao&&ent;
     h+=`<div class="ilin ${t.usar?'':'off'}">
@@ -970,6 +977,14 @@ function guardar(id,s){const v=num(val('g_v'));if(!(v>0))return toast('Valor inv
 
 /* ---------- recomeçar ---------- */
 const RESETS={
+  gastos:{
+    nome:'Apagar só os gastos',
+    conta:()=>{const n=todos().filter(t=>t.t==='d').length;return n+(n===1?' gasto':' gastos')},
+    some:'Todo gasto lançado ou importado.',
+    fica:'Salário e outras entradas, aportes, contas, cartões, categorias, investimentos e metas.',
+    faz:()=>{Object.keys(meses).forEach(k=>{
+      meses[k]=(meses[k]||[]).filter(t=>t.t!=='d'); if(!meses[k].length)delete meses[k]})}
+  },
   lanc:{
     nome:'Apagar os lançamentos',
     conta:()=>todos().length+(todos().length===1?' lançamento':' lançamentos'),
