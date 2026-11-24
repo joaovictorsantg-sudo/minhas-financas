@@ -195,7 +195,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v20 — 24/11';
+const VERSAO='v21 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -456,24 +456,17 @@ function linha({tx,p}){
 /* ---------- telas ---------- */
 const V={
 inicio(){
-  const M=st.mes,r=resumo(M),R=ritmo(M);
+  const M=st.mes,r=resumo(M);
+  const temSal=doMes(M).some(({tx})=>tx.t==='r'&&tx.cat==='salario');
   let h=mnav();
-  const adiantado=R.pGasto>R.pMes+.08, folgado=R.pGasto<R.pMes-.08;
-  const caixa=totalContas(), dSal=dataSalario(M), salPend=cfg.salario>0&&!doMes(M).some(({tx})=>tx.t==='r'&&tx.cat==='salario');
-  h+=`<div class="hero"><span class="lbl">Resta do orçamento</span>
-  <span class="vbig ${R.livre<0?'down':''}">${money(R.livre)}</span>
-  <div class="gauge"><div class="fill ${R.pGasto>1?'hot':adiantado?'':'ok'}" style="width:${Math.min(100,R.pGasto*100)}%"></div>
-  ${R.dia?`<div class="mark" style="left:${Math.min(99.5,R.pMes*100)}%"></div>`:''}</div>
-  <div class="lbl" style="margin-top:12px">Você gastou ${money(R.gasto)} dos ${money(R.orc)} planejados${R.dia?`, e o mês está no dia ${R.dia} de ${R.dias}`:''}.
-  ${R.dia?(R.pGasto>1?' O orçamento já estourou.':adiantado?' Está correndo na frente do calendário.':folgado?' Está sobrando mais do que o esperado para esta altura.':' Está no ritmo certo.'):''}</div>
-  <div class="real"><span class="lbl">Dinheiro de verdade, hoje</span><span class="vmid ${caixa<=0?'down':''}">${money(caixa)}</span>
-  <div class="lbl" style="margin-top:4px;width:100%">${caixa<R.livre?'O orçamento acima é o plano do mês inteiro, não saldo.':'Saldo somado de todas as contas.'}${salPend?' Seu salário cai em '+dataBR(dSal)+'.':''}</div></div>
+  const caixa=totalContas(), dSal=dataSalario(M), salPend=cfg.salario>0&&!temSal;
+  h+=`<div class="hero"><span class="lbl">Dinheiro hoje</span>
+  <span class="vbig ${caixa<0?'down':''}">${money(caixa)}</span>
+  <div class="lbl" style="margin-top:6px">Saldo somado de todas as contas.${salPend?' Seu salário cai em '+dataBR(dSal)+'.':''}</div>
   <div class="trio"><div><span class="lbl">Entrou</span><b class="up">${money(r.rec)}</b></div>
   <div><span class="lbl">Gastou</span><b>${money(r.desp)}</b></div>
-  <div><span class="lbl">Investiu</span><b>${money(r.apo)}</b></div></div>`;
-  if(cfg.salario>0&&!doMes(M).some(({tx})=>tx.t==='r'&&tx.cat==='salario'))
-    h+=`<div class="acts"><button class="btn g" onclick="lancarSalario()">Registrar salário de ${brl(cfg.salario)}</button></div>`;
-  h+=`</div>`;
+  <div><span class="lbl">Investiu</span><b>${money(r.apo)}</b></div></div>
+  ${salPend?`<div class="acts"><button class="btn g" onclick="lancarSalario()">Registrar salário de ${brl(cfg.salario)}</button></div>`:''}</div>`;
 
   const est=cfg.cartoes.filter(c=>usado(c)>c.limite);
   if(est.length)h+=`<div class="note"><b>Limite estourado</b>${est.map(c=>esc(c.nome)+' tem '+brl(usado(c))+' comprometidos de um limite de '+brl(c.limite)+'.').join(' ')} Esse cartão não passa em compra nova até a fatura ser paga.</div>`;
@@ -590,7 +583,15 @@ planos(){
    :sobra>0&&totalCartoes()>0?`<p class="hint" style="padding-left:0">A folga de ${brl(sobra)} por mês zera os ${brl(totalCartoes())} de cartão em cerca de ${Math.ceil(totalCartoes()/sobra)} meses.</p>`:''}
   <div class="acts"><button class="btn g" onclick="abrirAjustes()">Editar o plano</button></div></div>`;
 
-  h+=`<h2>Como está ${MES[+M.slice(5)-1]}</h2><div class="grp"><div class="pad">
+  const R=ritmo(M), adiantado=R.pGasto>R.pMes+.08, folgado=R.pGasto<R.pMes-.08;
+  h+=`<h2>Como está ${MES[+M.slice(5)-1]}</h2>
+  <div class="hero"><span class="lbl">Resta do orçamento</span>
+  <span class="vbig ${R.livre<0?'down':''}">${money(R.livre)}</span>
+  <div class="gauge"><div class="fill ${R.pGasto>1?'hot':adiantado?'':'ok'}" style="width:${Math.min(100,R.pGasto*100)}%"></div>
+  ${R.dia?`<div class="mark" style="left:${Math.min(99.5,R.pMes*100)}%"></div>`:''}</div>
+  <div class="lbl" style="margin-top:12px">Você gastou ${money(R.gasto)} dos ${money(R.orc)} planejados${R.dia?`, e o mês está no dia ${R.dia} de ${R.dias}`:''}.
+  ${R.dia?(R.pGasto>1?' O orçamento já estourou.':adiantado?' Está correndo na frente do calendário.':folgado?' Está sobrando mais do que o esperado para esta altura.':' Está no ritmo certo.'):''}</div></div>
+  <div class="grp"><div class="pad">
   <div style="display:flex;align-items:baseline"><span>Gasto</span><span style="flex:1"></span><span class="vmid">${money(r.desp)}</span><span class="lbl"> de ${brl(o)}</span></div>${barra(r.desp,o)}
   <div style="display:flex;align-items:baseline;margin-top:16px"><span>Investido</span><span style="flex:1"></span><span class="vmid">${money(r.apo)}</span><span class="lbl"> de ${brl(cfg.metaInvest)}</span></div>${barra(r.apo,cfg.metaInvest,1)}
   <div style="display:flex;align-items:baseline;margin-top:16px"><span>Entrou</span><span style="flex:1"></span><span class="vmid up">${money(r.rec)}</span></div></div></div>`;
