@@ -195,7 +195,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v33 — 24/11';
+const VERSAO='v34 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1128,6 +1128,12 @@ function criaDoBanco(a){
 }
 function mapeia(pid,pg){
   const a=(imp.achadas||[]).find(x=>x.pid===pid); if(!a)return;
+  // duas contas do banco no mesmo destino: o acerto de saldo de uma apaga o da
+  // outra, e a última a ser aplicada decide. Melhor não deixar acontecer.
+  if(pg&&pg!=='+'&&(imp.achadas||[]).some(x=>x.pid!==pid&&x.pg===pg)){
+    formImportar();
+    return toast('Esse destino já recebe outra conta do banco. Cada uma precisa do seu, senão o saldo de uma zera o da outra.');
+  }
   if(pg==='+'){pg=criaDoBanco(a);toast('Criado: '+((cartao(pg)||conta(pg)||{}).nome||''))}
   a.pg=pg;
   const b=cfg.bancos.find(x=>x.id===a.banco);
@@ -1232,7 +1238,8 @@ function blocoContas(){
       <div class="t2">${a.tipo==='CREDIT'?'cartão':'conta'}${a.saldo!=null?' · '+brl(Math.abs(a.saldo)):''}${a.limite?' · limite '+brl(a.limite):''}</div></div>
       <select onchange="mapeia('${a.pid}',this.value)" style="width:auto;max-width:48%;font-size:13px;padding:7px 8px">
         <option value="">— escolher —</option>
-        ${alvos.map(x=>`<option value="${x.id}" ${a.pg===x.id?'selected':''}>${x.emoji||'💳'} ${esc(x.nome)}</option>`).join('')}
+        ${alvos.map(x=>{const tom=as.some(y=>y.pid!==a.pid&&y.pg===x.id);
+          return `<option value="${x.id}" ${a.pg===x.id?'selected':''} ${tom?'disabled':''}>${x.emoji||'💳'} ${esc(x.nome)}${tom?' (já usado)':''}</option>`}).join('')}
         <option value="+">+ criar ${a.tipo==='CREDIT'?'cartão':'conta'} no app</option>
       </select></div>`;
   });
@@ -1614,7 +1621,10 @@ async function sincronizar(auto){
     if(!contas.length)erros.push({b:b.nome||'Banco',
       m:'o banco não devolveu nenhuma conta. Se ele só mostrou investimentos, a conexão no meu.pluggy.ai provavelmente não autorizou conta corrente e cartão'});
     for(const c of contas){
-      const pg=destinoPluggy(b,c);
+      let pg=destinoPluggy(b,c);
+      if(pg&&achadas.some(x=>x.pg===pg)){ // duplicado já gravado: desfaz e deixa escolher
+        pg=''; if(b.mapa)delete b.mapa[c.id]; salvarCfg();
+      }
       achadas.push({pid:c.id,banco:b.id,nome:c.nome,marca:c.banco,tipo:c.tipo,
         saldo:c.saldo,limite:c.limite,fecha:c.fecha,vence:c.vence,pg,pgIni:pg});
       if(!pg)continue; // sem destino: aparece na revisão para o usuário apontar
@@ -1726,9 +1736,12 @@ const RESETS={
   lanc:{
     nome:'Apagar os lançamentos',
     conta:()=>todos().length+(todos().length===1?' lançamento':' lançamentos'),
-    some:'Todo gasto, entrada e aporte que você registrou ou importou.',
-    fica:'Contas, cartões, categorias, investimentos e metas continuam como estão.',
-    faz:()=>{meses={};cfg.bancos.forEach(b=>{b.desde='';b.desdeC={}})}
+    some:'Todo gasto, entrada e aporte que você registrou ou importou, e o saldo anterior das contas.',
+    fica:'As contas em si, com os cartões, categorias, investimentos e metas.',
+    // o saldo anterior foi calculado de trás para frente a partir dos lançamentos:
+    // sem eles ele não quer dizer nada e só distorce o que vier depois
+    faz:()=>{meses={};cfg.contas.forEach(c=>{c.saldo=0});
+      cfg.bancos.forEach(b=>{b.desde='';b.desdeC={}})}
   },
   aberturas:{
     nome:'Zerar o saldo anterior dos cartões',

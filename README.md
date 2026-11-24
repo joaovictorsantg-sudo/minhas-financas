@@ -101,6 +101,11 @@ investido vai ficar e avisa quais posições suas não casaram com nenhuma
 do banco — é assim que se percebe que a mesma aplicação está prestes a
 entrar duas vezes.
 
+Duas contas do banco não podem apontar para a mesma conta do app: o
+acerto de saldo de uma sobrescreve o da outra, e quem aplicar por último
+decide. Um mapeamento assim já gravado é desfeito na sincronização
+seguinte.
+
 Lançamento que aponta para uma conta apagada é sinalizado na tela
 inicial, com a opção de mandar para outra conta ou apagar. Ele continuava
 somando no mês e em nenhum saldo, o que faz o dinheiro em conta aparecer
