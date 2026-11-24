@@ -80,6 +80,10 @@ h2 a{font-size:13px;font-weight:500;color:var(--acc);cursor:pointer;text-decorat
 .split i{display:block;height:100%}
 
 /* trio de métricas */
+.plin{display:flex;align-items:baseline;gap:8px;margin-top:10px;font-size:14px}
+.plin .pb{width:9px;height:9px;border-radius:3px;flex:none;align-self:center}
+.plin .sp2{flex:1}
+.plin .pp{min-width:34px;text-align:right}
 .real{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
 .real .lbl{flex:1}
 .trio{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border-radius:var(--r-sm);overflow:hidden;margin-top:16px}
@@ -191,7 +195,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v19 — 24/11';
+const VERSAO='v20 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -240,9 +244,9 @@ const ICO={
  lanc:'<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8.5 8.5h7M8.5 12.5h7M8.5 16.5h4"/>',
  cartoes:'<rect x="2.5" y="5.5" width="19" height="13" rx="2.5"/><path d="M2.5 10h19"/>',
  investir:'<path d="M4 16.5 9.5 11l3.5 3.5L20 7"/><path d="M15 7h5v5"/>',
- metas:'<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" fill="currentColor"/>'
+ planos:'<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" fill="currentColor"/>'
 };
-const ABAS=[['inicio','Início'],['lanc','Extrato'],['cartoes','Cartões'],['investir','Investir'],['metas','Metas']];
+const ABAS=[['inicio','Início'],['lanc','Extrato'],['cartoes','Cartões'],['investir','Investir'],['planos','Planos']];
 
 let cfg=clone(DEF), meses={};
 const st={tab:'inicio',mes:mk(hoje()),filtro:''};
@@ -492,15 +496,9 @@ inicio(){
     ${barra(u,c.limite)}
     <div class="lbl" style="margin-top:8px;display:flex"><span>${brl(u)} comprometidos</span><span style="flex:1"></span><span class="${livre<0?'down':''}">${livre<0?brl(-livre)+' além do limite':brl(livre)+' livres'}</span></div></div>`});
 
-  h+=`<h2>Orçamento<span class="sp"></span><a onclick="abrirAjustes()">editar</a></h2><div class="grp">`;
-  const cats=[...cfg.categorias];Object.keys(r.porCat).forEach(id=>{if(!cats.find(c=>c.id===id))cats.push({id,...catInfo(id),orc:0})});
-  const vis=cats.filter(c=>(+c.orc||0)>0||(r.porCat[c.id]||0)>0);
-  if(!vis.length)h+=`<div class="blank">Nenhuma categoria com orçamento.</div>`;
-  vis.forEach(c=>{const g=r2(r.porCat[c.id]||0),o=+c.orc||0,resta=r2(o-g);
-    h+=`<div class="env" onclick="st.filtro='${c.id}';ir('lanc')"><div class="top"><span class="nm">${c.emoji} ${esc(c.nome)}</span><span class="vmid">${money(g)}</span><span class="lbl">de ${brl(o)}</span></div>
-    ${barra(g,o)}<div class="sub">${resta>=0?'Resta '+brl(resta):'<span class="down">Passou '+brl(-resta)+' do planejado</span>'}</div></div>`});
   const g=grafico();
-  h+=`</div>`+(g?`<h2>Entradas e gastos</h2><div class="grp"><div class="pad" style="padding-bottom:14px">${g}</div></div>`:'');
+  h+=g?`<h2>Entrou e gastou<span class="sp"></span><a onclick="ir('planos')">ver planejamento</a></h2>
+  <div class="grp"><div class="pad" style="padding-bottom:14px">${g}</div></div>`:'';
   return h;
 },
 lanc(){
@@ -576,24 +574,45 @@ investir(){
   if(rv.length)h+=`<div class="acts"><button class="btn g" onclick="novo('a')">Registrar aporte em ação</button></div>`;
   return h;
 },
-metas(){
-  let h=`<h2>Objetivos<span class="sp"></span><a onclick="formObj()">novo objetivo</a></h2>`;
+planos(){
+  const M=st.mes,r=resumo(M),o=orcTotal(),sobra=r2(cfg.salario-o-cfg.metaInvest);
+  const fGasto=pct(o,cfg.salario),fInv=pct(cfg.metaInvest,cfg.salario),fSobra=pct(Math.max(0,sobra),cfg.salario);
+  let h=mnav();
+  h+=`<div class="hero"><div style="display:flex;align-items:baseline"><span class="lbl">Plano do salário</span><span style="flex:1"></span><span class="vmid">${money(cfg.salario)}</span></div>
+  <div class="split" style="height:14px;margin-top:12px">
+    <i style="width:${fGasto}%;background:var(--acc)"></i>
+    <i style="width:${fInv}%;background:var(--up)"></i>
+    <i style="width:${fSobra}%;background:var(--line2)"></i></div>
+  <div class="plin"><span class="pb" style="background:var(--acc)"></span><span>Gastos planejados</span><span class="sp2"></span><span class="n">${money(o)}</span><span class="lbl pp">${Math.round(fGasto)}%</span></div>
+  <div class="plin"><span class="pb" style="background:var(--up)"></span><span>Investir</span><span class="sp2"></span><span class="n">${money(cfg.metaInvest)}</span><span class="lbl pp">${Math.round(fInv)}%</span></div>
+  <div class="plin"><span class="pb" style="background:var(--line2)"></span><span>Folga</span><span class="sp2"></span><span class="n ${sobra<0?'down':''}">${money(sobra)}</span><span class="lbl pp">${Math.round(fSobra)}%</span></div>
+  ${sobra<0?`<p class="hint" style="padding-left:0">O plano não fecha: gastos e meta somam ${brl(o+cfg.metaInvest)}, mais do que o salário.</p>`
+   :sobra>0&&totalCartoes()>0?`<p class="hint" style="padding-left:0">A folga de ${brl(sobra)} por mês zera os ${brl(totalCartoes())} de cartão em cerca de ${Math.ceil(totalCartoes()/sobra)} meses.</p>`:''}
+  <div class="acts"><button class="btn g" onclick="abrirAjustes()">Editar o plano</button></div></div>`;
+
+  h+=`<h2>Como está ${MES[+M.slice(5)-1]}</h2><div class="grp"><div class="pad">
+  <div style="display:flex;align-items:baseline"><span>Gasto</span><span style="flex:1"></span><span class="vmid">${money(r.desp)}</span><span class="lbl"> de ${brl(o)}</span></div>${barra(r.desp,o)}
+  <div style="display:flex;align-items:baseline;margin-top:16px"><span>Investido</span><span style="flex:1"></span><span class="vmid">${money(r.apo)}</span><span class="lbl"> de ${brl(cfg.metaInvest)}</span></div>${barra(r.apo,cfg.metaInvest,1)}
+  <div style="display:flex;align-items:baseline;margin-top:16px"><span>Entrou</span><span style="flex:1"></span><span class="vmid up">${money(r.rec)}</span></div></div></div>`;
+
+  h+=`<h2>Orçamento por categoria<span class="sp"></span><a onclick="abrirAjustes()">editar</a></h2><div class="grp">`;
+  const cats=[...cfg.categorias];Object.keys(r.porCat).forEach(id=>{if(!cats.find(c=>c.id===id))cats.push({id,...catInfo(id),orc:0})});
+  const vis=cats.filter(c=>(+c.orc||0)>0||(r.porCat[c.id]||0)>0);
+  if(!vis.length)h+=`<div class="blank">Nenhuma categoria com orçamento.<div style="margin-top:16px"><button class="btn s" onclick="abrirAjustes()">Definir orçamento</button></div></div>`;
+  vis.forEach(c=>{const g=r2(r.porCat[c.id]||0),oc=+c.orc||0,resta=r2(oc-g);
+    h+=`<div class="env" onclick="st.filtro='${c.id}';ir('lanc')"><div class="top"><span class="nm">${c.emoji} ${esc(c.nome)}</span><span class="vmid">${money(g)}</span><span class="lbl">de ${brl(oc)}</span></div>
+    ${barra(g,oc)}<div class="sub">${resta>=0?'Resta '+brl(resta):'<span class="down">Passou '+brl(-resta)+' do planejado</span>'}</div></div>`});
+  h+=`</div>`;
+
+  h+=`<h2>Objetivos<span class="sp"></span><a onclick="formObj()">novo objetivo</a></h2>`;
   if(!cfg.objetivos.length)h+=`<div class="grp"><div class="blank">Sem objetivos ainda.</div></div>`;
-  cfg.objetivos.forEach(o=>{const falta=r2(Math.max(0,o.alvo-o.guardado));let rit='';
-    if(o.prazo&&falta>0){const n=Math.max(1,difM(mk(hoje()),o.prazo));rit=` Guardando ${brl(falta/n)} por mês, você chega lá em ${curtoMes(o.prazo)}.`}
-    h+=`<div class="panel"><div style="display:flex;align-items:baseline;gap:8px"><span class="ico">${esc(o.emoji||'🎯')}</span>
-    <span style="flex:1"><b style="font-weight:600">${esc(o.nome)}</b><div class="lbl">${brl(o.guardado)} de ${brl(o.alvo)}</div></span>
-    <span class="vmid">${Math.round(pct(o.guardado,o.alvo))}%</span></div>
-    ${barra(o.guardado,o.alvo,1)}<div class="lbl" style="margin-top:8px">${falta>0?'Faltam '+brl(falta)+'.':'Objetivo atingido.'}${rit}</div>
-    <div class="acts"><button class="btn s" onclick="formGuardar('${o.id}')">Guardar ou retirar</button><button class="btn g s" onclick="formObj('${o.id}')">Editar</button></div></div>`});
-  const o=orcTotal(),sobra=r2(cfg.salario-o-cfg.metaInvest);
-  h+=`<h2>Plano do salário<span class="sp"></span><a onclick="abrirAjustes()">editar</a></h2><div class="grp"><div class="pad">
-  <div style="display:flex;align-items:baseline"><span>Salário</span><span style="flex:1"></span><span class="vmid">${money(cfg.salario)}</span></div>
-  <div style="display:flex;align-items:baseline;margin-top:9px"><span class="lbl">Gastos planejados</span><span style="flex:1"></span><span class="n">−${money(o)}</span></div>
-  <div style="display:flex;align-items:baseline;margin-top:7px"><span class="lbl">Meta de investimento</span><span style="flex:1"></span><span class="n">−${money(cfg.metaInvest)}</span></div>
-  <div style="display:flex;align-items:baseline;margin-top:13px;padding-top:13px;border-top:1px solid var(--line)"><b style="font-weight:600">Folga</b><span style="flex:1"></span><span class="vmid ${sobra<0?'down':'up'}">${money(sobra)}</span></div>
-  <div class="split"><i style="width:${pct(o,cfg.salario)}%;background:var(--acc)"></i><i style="width:${pct(cfg.metaInvest,cfg.salario)}%;background:var(--up)"></i><i style="width:${pct(Math.max(0,sobra),cfg.salario)}%;background:var(--line2)"></i></div>
-  <div class="lbl" style="margin-top:10px">${Math.round(pct(cfg.metaInvest,cfg.salario))}% do salário vai para investimento.${sobra>0&&totalCartoes()>0?` A folga de ${brl(sobra)} por mês zera os ${brl(totalCartoes())} de cartão em cerca de ${Math.ceil(totalCartoes()/sobra)} meses.`:''}</div></div></div>`;
+  cfg.objetivos.forEach(ob=>{const falta=r2(Math.max(0,ob.alvo-ob.guardado));let rit='';
+    if(ob.prazo&&falta>0){const n=Math.max(1,difM(mk(hoje()),ob.prazo));rit=` Guardando ${brl(falta/n)} por mês, você chega lá em ${curtoMes(ob.prazo)}.`}
+    h+=`<div class="panel"><div style="display:flex;align-items:baseline;gap:8px"><span class="ico">${esc(ob.emoji||'🎯')}</span>
+    <span style="flex:1"><b style="font-weight:600">${esc(ob.nome)}</b><div class="lbl">${brl(ob.guardado)} de ${brl(ob.alvo)}</div></span>
+    <span class="vmid">${Math.round(pct(ob.guardado,ob.alvo))}%</span></div>
+    ${barra(ob.guardado,ob.alvo,1)}<div class="lbl" style="margin-top:8px">${falta>0?'Faltam '+brl(falta)+'.':'Objetivo atingido.'}${rit}</div>
+    <div class="acts"><button class="btn s" onclick="formGuardar('${ob.id}')">Guardar ou retirar</button><button class="btn g s" onclick="formObj('${ob.id}')">Editar</button></div></div>`});
   return h;
 }};
 
@@ -630,7 +649,7 @@ function dataSalario(k){
 }
 function render(){
   const t=ABAS.find(a=>a[0]===st.tab);
-  $('#titulo').textContent=st.tab==='investir'?'Investimentos':t[1];
+  $('#titulo').textContent=st.tab==='investir'?'Investimentos':st.tab==='planos'?'Planejamento':t[1];
   $('#main').innerHTML=V[st.tab]();
   $('#nav').innerHTML=ABAS.map(([k,n])=>`<button class="${k===st.tab?'on':''}" onclick="ir('${k}')" aria-label="${n}"><svg viewBox="0 0 24 24">${ICO[k]}</svg>${n}</button>`).join('');
 }
@@ -1289,7 +1308,7 @@ function delObj(id){cfg.objetivos=cfg.objetivos.filter(o=>o.id!==id);salvarCfg()
 function formGuardar(id){const o=cfg.objetivos.find(x=>x.id===id);
   abrir(cab(esc(o.emoji+' '+o.nome))+`<label>Valor</label><input id="g_v" class="big" inputmode="decimal" placeholder="0,00">
   <div class="acts fim"><button class="btn g" onclick="guardar('${id}',-1)">Retirar</button><button class="btn" onclick="guardar('${id}',1)">Guardar</button></div>`);
-  setTimeout(()=>$('#g_v').focus(),60)}
+  setTimeout(()=>{const e=$('#g_v');if(e)e.focus()},60)}
 function guardar(id,s){const v=num(val('g_v'));if(!(v>0))return toast('Valor inválido');const o=cfg.objetivos.find(x=>x.id===id);
   o.guardado=Math.max(0,r2(o.guardado+s*v));salvarCfg();fechar();toast(s>0?'Guardado':'Retirado')}
 
