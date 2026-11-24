@@ -210,7 +210,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v50 — 24/11';
+const VERSAO='v51 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1454,9 +1454,9 @@ function blocoContas(){
   return h;
 }
 // aplica o que o banco diz sobre contas e cartões
-function aplicaContas(){
+function aplicaContas(achadas){
   let n=0;
-  (imp.achadas||[]).forEach(a=>{
+  (achadas||[]).forEach(a=>{
     if(!a.pg)return;
     if(a.tipo==='CREDIT'){
       const c=cartao(a.pg); if(!c)return;
@@ -1467,10 +1467,18 @@ function aplicaContas(){
         if(dF>=1&&dF<=31)c.fecha=dF;
         if(dV>=1&&dV<=31)c.vence=dV;
       }
-      if(a.saldo!=null){ // fatura aberta: completa a diferença, como no acerto manual
-        const F=fatAberta(c), atual=r2(faturas(c)[F]||0), alvo=r2(Math.abs(a.saldo));
+      // O saldo de um cartão é tudo o que se deve, não só a fatura aberta:
+      // medir contra uma fatura só empurra para ela a dívida das outras. E o
+      // ajuste é refeito, não somado — senão cada sincronização empilha mais
+      // um, e o do mês anterior fica congelado numa fatura que já passou.
+      if(a.saldo!=null&&c.doBanco!==false){
         c.aberturas=c.aberturas||{};
-        c.aberturas[F]=r2((+c.aberturas[F]||0)+(alvo-atual));
+        if(c.auto&&c.auto.F)c.aberturas[c.auto.F]=r2((+c.aberturas[c.auto.F]||0)-(+c.auto.v||0));
+        const F=fatAberta(c), fs=faturas(c);
+        const devendo=r2(Object.keys(fs).filter(K=>!paga(c,K)).reduce((x,K)=>x+fs[K],0));
+        const v=r2(Math.abs(a.saldo)-devendo);
+        c.aberturas[F]=r2((+c.aberturas[F]||0)+v);
+        c.auto={F,v};
         Object.keys(c.aberturas).forEach(K=>{if(Math.abs(c.aberturas[K])<0.005)delete c.aberturas[K]});
       }
       n++;
@@ -1666,7 +1674,7 @@ function confirmarImport(){
   }
   if(imp.sync){
     if(imp.acertar){
-      const n=aplicaContas();if(n)msg+=', '+n+(n===1?' conta acertada':' contas acertadas');
+      const n=aplicaContas(imp.achadas);if(n)msg+=', '+n+(n===1?' conta acertada':' contas acertadas');
       const v=aplicaInvestimentos();if(v)msg+=', '+v+(v===1?' investimento':' investimentos');
     }
     // só avança a marca das contas cujo extrato foi realmente lido: uma conta
@@ -1953,18 +1961,30 @@ async function sincronizar(auto){
   const semDestino=achadas.filter(a=>!a.pg).length;
   if(!itens.length&&!semDestino&&!invsAg.length){
     if(erros.length)return auto?null:toast('Não deu para trazer de '+erros[0].b+': '+erros[0].m);
-    return auto?null:toast('Nada novo para trazer');
+    // nada novo para lançar não é nada novo para saber: saldo e fatura mudam
+    // sozinhos, e são o que a tela mostra primeiro
+    const foto=()=>JSON.stringify([cfg.contas.map(c=>c.saldo),cfg.cartoes.map(c=>[c.limite,c.fecha,c.vence,c.aberturas])]);
+    const antes=foto();
+    aplicaContas(achadas);
+    const mudou=foto()!==antes;
+    if(mudou){salvarCfg();render()}
+    return auto?null:toast(mudou?'Saldos e faturas atualizados':'Nada novo para trazer');
   }
   itens.sort((a,b)=>a.data.localeCompare(b.data));
   const antigos=todos();
   const jaTem=new Set(antigos.map(x=>x.k));
-  const jaTemH=new Set(antigos.map(semOrigemLanc));
+  // Reconectar o banco repete os mesmos lançamentos com ids novos, e por isso
+  // o conteúdo também conta. Mas duas passagens iguais no mesmo dia são duas
+  // passagens: o que importa é quantas já existem, não se alguma existe.
+  const quantos={}, usados={};
+  antigos.forEach(t=>{const h=semOrigemLanc(t);quantos[h]=(quantos[h]||0)+1});
   const montado={pg:(itens[0]||{}).pg||(cfg.contas[0]||{}).id,inv:false,saldo:null,ajusta:false,
     sync:true,achadas,invs:invsAg,erros,acertar:true,itens:itens.map(t=>{
     // CREDIT num cartão é dinheiro entrando nele: pagamento ou estorno, nunca compra
     const k=chaveTx(t);
     const nat=natureza(t.desc)||(cartao(t.pg)&&String(t.tp||'').toUpperCase()==='CREDIT'?'fatura':'');
-    const dup=jaTem.has(k)||jaTemH.has(semOrigem(t));
+    const hh=semOrigem(t), ja=(usados[hh]=(usados[hh]||0)+1);
+    const dup=jaTem.has(k)||ja<=(quantos[hh]||0);
     return {...t,k,dup,nat,quita:null,met:'',usar:!dup&&!nat,cat:categorizar(t.desc,t.v>0,t.v)};
   })};
   const novos=montado.itens.filter(t=>t.usar).length+semDestino+invsAg.length;

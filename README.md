@@ -154,10 +154,16 @@ Orçamento não definido não é orçamento de zero. Sem ele a tela de
 planejamento mostra o gasto do mês e convida a definir um, em vez de
 acusar estouro contra uma meta que ninguém escreveu.
 
+O saldo de um cartão é tudo o que se deve, não a fatura em aberto, e o
+ajuste que o aproxima do que o app calculou é refeito a cada
+sincronização em vez de somado. Saldos e faturas são atualizados mesmo
+quando não há lançamento novo: eles mudam sozinhos.
+
 Repetido é reconhecido pelo id do banco e também pela data, valor e
 descrição. Reconectar um banco gera ids novos para as mesmas transações,
-e só pelo id o histórico inteiro voltaria como novidade. Duas compras
-iguais no mesmo dia que cheguem juntas continuam entrando as duas.
+e só pelo id o histórico inteiro voltaria como novidade. O que conta é quantas já existem,
+não se alguma existe: duas passagens iguais no mesmo dia são duas
+passagens, mesmo chegando em sincronizações diferentes.
 
 Duas contas do banco não podem apontar para a mesma conta do app: o
 acerto de saldo de uma sobrescreve o da outra, e quem aplicar por último
