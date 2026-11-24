@@ -191,7 +191,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v17 — 24/11';
+const VERSAO='v18 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -396,7 +396,14 @@ const fechaData=(c,F)=>p2(c.fecha)+'/'+F.slice(5,7);
 const venceData=(c,F)=>p2(c.vence)+'/'+mesVenc(c,F).slice(5,7);
 const pagaKey=(c,F)=>c.id+':'+F;
 const paga=(c,F)=>!!cfg.faturasPagas[pagaKey(c,F)];
-const pagaPor=(c,F)=>{const v=cfg.faturasPagas[pagaKey(c,F)];return (typeof v==='string'&&conta(v))?v:c.conta};
+function pagaPor(c,F){
+  const v=cfg.faturasPagas[pagaKey(c,F)];
+  if(v&&typeof v==='object'&&conta(v.c))return v.c;
+  if(typeof v==='string'&&conta(v))return v;
+  return c.conta;
+}
+const pagaEm=(c,F)=>{const v=cfg.faturasPagas[pagaKey(c,F)];return (v&&typeof v==='object'&&v.d)||''};
+const vencISO=(c,F)=>{const mv=mesVenc(c,F);return mv+'-'+p2(Math.min(c.vence,diasNo(mv)))};
 function faturas(c){
   const m=Object.assign({},c.aberturas||{});
   todos().forEach(tx=>{if(tx.pg!==c.id||tx.t!=='d')return;partes(tx).forEach(p=>m[p.fat]=r2((m[p.fat]||0)+p.v))});
@@ -525,7 +532,7 @@ cartoes(){
     if(!lista.length)h+=`<div style="display:block;padding:0"><div class="blank">Nenhuma compra lançada neste cartão.</div></div>`;
     lista.forEach(F=>{const pg=paga(c,F);
       const tg=pg?'<span class="tag ok">paga</span>':F<A?'<span class="tag hot">fechada</span>':F===A?'<span class="tag warn">aberta</span>':'<span class="tag">futura</span>';
-      h+=`<div class="row" style="cursor:default"><span class="mid"><span class="t1">Fatura de ${curtoMes(mesVenc(c,F))} ${tg}</span><span class="t2">fecha ${fechaData(c,F)}, vence ${venceData(c,F)}</span></span>
+      h+=`<div class="row" style="cursor:default"><span class="mid"><span class="t1">Fatura de ${curtoMes(mesVenc(c,F))} ${tg}</span><span class="t2">fecha ${fechaData(c,F)}, vence ${venceData(c,F)}${paga(c,F)&&pagaEm(c,F)?' · paga em '+dataBR(pagaEm(c,F)):''}</span></span>
       <span class="end vmid">${money(f[F])}</span>${F<=A||pg?`<button class="btn ${pg?'g':''} s" onclick="pagarFatura('${c.id}','${F}')">${pg?'Desfazer':'Paguei'}</button>`:''}</div>`});
     h+=`</div></div>`;
   });
@@ -720,12 +727,35 @@ function excluir(k,id){
 function pagarFatura(cid,F){
   const c=cartao(cid),k=pagaKey(c,F);
   if(cfg.faturasPagas[k]){delete cfg.faturasPagas[k];salvarCfg();return toast('Desfeito')}
-  abrir(cab('Pagar fatura de '+curtoMes(mesVenc(c,F)))+`<span class="vbig">${money(faturas(c)[F]||0)}</span>
-  <p class="hint" style="padding-left:0;margin-top:6px">${esc(c.nome)}, vence ${venceData(c,F)}.</p>
-  <label>De qual conta saiu</label><select id="pf_c">${cfg.contas.map(x=>`<option value="${x.id}" ${x.id===c.conta?'selected':''}>${x.emoji} ${esc(x.nome)} — ${brl(saldoConta(x.id))}</option>`).join('')}</select>
-  <div class="acts fim"><button class="btn g" onclick="fechar()">Cancelar</button><button class="btn" onclick="confirmaPg('${cid}','${F}')">Confirmar</button></div>`);
+  const v=r2(faturas(c)[F]||0), venc=vencISO(c,F), passado=venc<hoje();
+  pg={cid,F,v,data:venc,conta:c.conta,manter:passado};
+  formPagar();
 }
-function confirmaPg(cid,F){const c=cartao(cid);cfg.faturasPagas[pagaKey(c,F)]=val('pf_c')||c.conta;salvarCfg();fechar();toast('Fatura paga, limite liberado')}
+let pg=null;
+function lePagar(){['conta','data'].forEach(x=>{const e=$('#pf_'+x);if(e)pg[x]=e.value})}
+function formPagar(){
+  const c=cartao(pg.cid), antes=saldoConta(pg.conta), depois=r2(antes-(pg.manter?0:pg.v));
+  abrir(cab('Pagar a fatura de '+curtoMes(mesVenc(c,pg.F)))+
+  `<span class="vbig">${money(pg.v)}</span>
+  <p class="hint" style="padding-left:0;margin-top:6px">${esc(c.nome)}, vence ${venceData(c,pg.F)}.</p>
+  <div class="two"><div><label>Saiu de</label><select id="pf_conta" onchange="lePagar();formPagar()">${cfg.contas.map(x=>`<option value="${x.id}" ${x.id===pg.conta?'selected':''}>${x.emoji} ${esc(x.nome)}</option>`).join('')}</select></div>
+  <div><label>Em que dia</label><input id="pf_data" type="date" value="${esc(pg.data)}" onchange="lePagar();formPagar()"></div></div>
+  <div class="ilin" style="border-bottom:0;margin-top:14px" onclick="lePagar();pg.manter=!pg.manter;formPagar()">
+    <button class="ick" style="${pg.manter?'':'background:none;border-color:var(--line2)'}">${pg.manter?'✓':''}</button>
+    <div class="imid"><div class="t1">Esse pagamento já está no saldo da conta</div>
+    <div class="t2">Marque se o banco já descontou e você digitou o saldo depois disso. É o caso de fatura antiga.</div></div></div>
+  <p class="hint" style="padding-left:0">${esc((conta(pg.conta)||{}).nome||'')} ${pg.manter?'continua em '+brl(antes):'vai de '+brl(antes)+' para '+brl(depois)}.</p>
+  <div class="acts fim"><button class="btn g" onclick="fechar()">Cancelar</button>
+  <button class="btn" onclick="confirmaPg()">Confirmar</button></div>`);
+}
+function confirmaPg(){
+  lePagar();
+  const c=cartao(pg.cid);
+  cfg.faturasPagas[pagaKey(c,pg.F)]={c:pg.conta,d:pg.data||vencISO(c,pg.F)};
+  // já descontado pelo banco: compensa no ponto de partida para o saldo não cair de novo
+  if(pg.manter){const k=conta(pg.conta); if(k)k.saldo=r2((+k.saldo||0)+pg.v)}
+  pg=null;salvarCfg();fechar();toast('Fatura paga, limite liberado');
+}
 
 /* ---------- investimentos ---------- */
 function formCotacoes(){
@@ -1073,7 +1103,7 @@ function confirmarImport(){
     const vv=vImp(t), ent=vv>0;
     if(t.quita){ // marca a fatura como paga, que já desconta da conta
       const c=cartao(t.quita.cid);
-      if(c&&!paga(c,t.quita.F)){cfg.faturasPagas[pagaKey(c,t.quita.F)]=imp.pg;quitadas++}
+      if(c&&!paga(c,t.quita.F)){cfg.faturasPagas[pagaKey(c,t.quita.F)]={c:imp.pg,d:t.data};quitadas++}
       return;
     }
     if(ehCartao&&ent)return; // pagamento de fatura não é lançamento
