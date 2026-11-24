@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Minhas Finanças</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -37,14 +37,15 @@ button,input,select{font-family:inherit}
 .cur{font-size:.62em;font-weight:500;color:var(--mute);margin-right:.18em;letter-spacing:0}
 
 /* topo */
-header{flex:0 0 auto;z-index:12;background:var(--base);padding:calc(12px + env(safe-area-inset-top,0px)) 18px 10px;
+header{flex:0 0 auto;z-index:12;background:var(--base);padding:calc(12px + env(safe-area-inset-top,0px)) calc(18px + env(safe-area-inset-right,0px)) 10px calc(18px + env(safe-area-inset-left,0px));
   display:flex;align-items:center;gap:10px;border-bottom:1px solid transparent;transition:border-color .2s}
 header.stuck{border-bottom-color:var(--line)}
 header h1{flex:1;margin:0;font-size:19px;font-weight:600;letter-spacing:-.015em}
 .icbtn{width:38px;height:38px;border:0;border-radius:12px;background:var(--surf);color:var(--ink2);display:grid;place-items:center;cursor:pointer}
 .icbtn:active{background:var(--surf2)}
 main{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
-  padding:0 16px calc(24px + env(safe-area-inset-bottom,0px));max-width:600px;margin:0 auto;width:100%}
+  padding:0 calc(16px + env(safe-area-inset-right,0px)) 24px calc(16px + env(safe-area-inset-left,0px));
+  max-width:600px;margin:0 auto;width:100%}
 
 /* navegação de mês */
 .mnav{display:flex;align-items:center;gap:4px;margin:4px 0 14px}
@@ -134,15 +135,25 @@ h2 a{font-size:13px;font-weight:500;color:var(--acc);cursor:pointer;text-decorat
 
 /* barra inferior */
 nav{flex:0 0 auto;z-index:12;background:var(--surf);border-top:1px solid var(--line);
-  display:flex;padding:8px 6px calc(10px + env(safe-area-inset-bottom,0px))}
+  display:flex;padding:8px calc(6px + env(safe-area-inset-right,0px)) calc(10px + env(safe-area-inset-bottom,0px)) calc(6px + env(safe-area-inset-left,0px))}
 nav button{flex:1;border:0;background:none;color:var(--mute);font-size:10.5px;font-weight:500;cursor:pointer;
   display:flex;flex-direction:column;align-items:center;gap:3px;padding:3px 2px;border-radius:10px}
 nav button svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 nav button.on{color:var(--acc)}
-.fab{position:fixed;right:18px;bottom:calc(86px + env(safe-area-inset-bottom,0px));width:56px;height:56px;border-radius:19px;border:0;
+.fab{position:fixed;right:calc(18px + env(safe-area-inset-right,0px));bottom:calc(86px + env(safe-area-inset-bottom,0px));width:56px;height:56px;border-radius:19px;border:0;
   background:var(--acc);color:var(--accInk);z-index:13;cursor:pointer;display:grid;place-items:center}
 .fab svg{width:25px;height:25px;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round}
 .fab:active{transform:scale(.94)}
+
+/* Instalado, o Android pode desenhar sob as barras e ainda assim informar
+   zero como tamanho delas. max() pega o que for maior: a medida real quando
+   ela existe, um mínimo decente quando não existe. */
+@media (display-mode: standalone), (display-mode: fullscreen){
+  header{padding-top:calc(12px + max(env(safe-area-inset-top,0px), 28px))}
+  nav{padding-bottom:calc(10px + max(env(safe-area-inset-bottom,0px), 14px))}
+  .fab{bottom:calc(86px + max(env(safe-area-inset-bottom,0px), 14px))}
+  .toast{bottom:calc(158px + max(env(safe-area-inset-bottom,0px), 14px))}
+}
 
 /* painel deslizante */
 .ov{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:30;display:none;align-items:flex-end;justify-content:center}
@@ -197,7 +208,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v47 — 24/11';
+const VERSAO='v48 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
