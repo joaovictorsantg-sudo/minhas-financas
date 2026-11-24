@@ -191,7 +191,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v14 — 24/11';
+const VERSAO='v15 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -515,6 +515,8 @@ cartoes(){
     ${barra(u,c.limite)}
     <div class="lbl" style="margin-top:8px;display:flex"><span>${brl(u)} comprometidos</span><span style="flex:1"></span><span class="${livre<0?'down':''}">${livre<0?brl(-livre)+' além do limite':brl(livre)+' livres'}</span></div>
     <p class="hint" style="padding-left:0">Fecha todo dia ${c.fecha}, vence dia ${c.vence}. O pagamento sai de ${esc((conta(c.conta)||{}).nome||'—')}.</p>
+    <div class="acts" style="margin-top:0"><button class="btn g s" onclick="formAcertaFatura('${c.id}')">Acertar fatura aberta</button>
+    <button class="btn g s" onclick="document.getElementById('ext').click()">Importar extrato do cartão</button></div>
     <div class="rows" style="margin:0 -16px">`;
     const lista=Object.keys(f).filter(F=>Math.abs(f[F])>.004).sort().filter(F=>!(paga(c,F)&&difM(F,A)>2));
     if(!lista.length)h+=`<div style="display:block;padding:0"><div class="blank">Nenhuma compra lançada neste cartão.</div></div>`;
@@ -525,7 +527,8 @@ cartoes(){
     h+=`</div></div>`;
   });
   h+=`<div class="acts"><button class="btn g" onclick="formCartao()">Adicionar cartão</button></div>
-  <p class="hint">Parcelas entram sozinhas nas faturas seguintes. Ao marcar uma fatura como paga, o valor sai da conta escolhida e o limite volta. O saldo que já existia antes de você começar a usar o app fica em Ajustes.</p>`;
+  <input type="file" id="ext" style="display:none" onchange="lerExtrato(this)">
+  <p class="hint">Parcelas entram sozinhas nas faturas seguintes. Ao marcar uma fatura como paga, o valor sai da conta escolhida e o limite volta. Se o banco só exporta a fatura fechada, use "acertar fatura aberta" para manter o limite certo.</p>`;
   return h;
 },
 investir(){
@@ -1093,6 +1096,28 @@ function delCartao(id){
   const usa=todos().some(tx=>tx.pg===id);
   if(usa)return toast('Esse cartão tem lançamentos. Apague-os antes.');
   cfg.cartoes=cfg.cartoes.filter(c=>c.id!==id);salvarCfg();fechar();toast('Cartão removido');
+}
+
+function formAcertaFatura(cid){
+  const c=cartao(cid); if(!c)return;
+  const F=fatAberta(c), atual=r2(faturas(c)[F]||0), u=usado(c);
+  const lanc=r2(atual-(c.aberturas&&c.aberturas[F]||0));
+  abrir(cab('Acertar a fatura do '+esc(c.nome))+
+  `<p class="hint" style="padding-left:0">Abra o app do ${esc(c.nome)}, veja o valor da fatura aberta e digite aqui. O app completa a diferença.</p>
+  <label>Fatura de ${curtoMes(mesVenc(c,F))}, que fecha ${fechaData(c,F)}</label>
+  <input id="af_v" class="big" inputmode="decimal" value="${n2(atual)}">
+  <p class="hint" style="padding-left:0">Hoje o app tem ${brl(atual)} nessa fatura${lanc>0?', sendo '+brl(lanc)+' de compras lançadas':''}. No total são ${brl(u)} comprometidos de ${brl(c.limite)}.</p>
+  <div class="acts fim"><button class="btn g" onclick="fechar()">Cancelar</button>
+  <button class="btn" onclick="salvaAcerto('${cid}')">Salvar</button></div>`);
+}
+function salvaAcerto(cid){
+  const c=cartao(cid), F=fatAberta(c), novo=num(val('af_v'));
+  if(!(novo>=0))return toast('Valor inválido');
+  const atual=r2(faturas(c)[F]||0);
+  c.aberturas=c.aberturas||{};
+  c.aberturas[F]=r2((+c.aberturas[F]||0)+(novo-atual));
+  if(Math.abs(c.aberturas[F])<0.005)delete c.aberturas[F];
+  salvarCfg();fechar();toast('Fatura acertada em '+brl(novo));
 }
 
 /* ---------- objetivos ---------- */
