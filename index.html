@@ -195,7 +195,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v25 — 24/11';
+const VERSAO='v26 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1455,7 +1455,8 @@ async function sincronizar(auto){
         saldo:c.saldo,limite:c.limite,fecha:c.fecha,vence:c.vence,pg});
       if(!pg)continue; // sem destino: aparece na revisão para o usuário apontar
       let lancs=[];
-      const desde=b.desde||addM(mk(hoje()),-3)+'-01';
+      // nunca sincronizado: busca o máximo que o Open Finance costuma guardar
+      const desde=b.desde||addM(mk(hoje()),-12)+'-01';
       try{ lancs=(await wk('/lancamentos',{accountId:c.id,desde})).lancamentos||[] }
       catch(e){ erro=e.message; continue }
       for(const l of lancs){
@@ -1518,7 +1519,14 @@ function formSync(){
     <div class="t2">Entra direto, com a categoria adivinhada. Transferência e repetido continuam de fora.</div></div></div>`:''}
   <div class="acts"><button class="btn" onclick="conectarBanco()">Conectar banco</button>
   ${cfg.bancos.length?`<button class="btn g" onclick="sincronizar()">Sincronizar agora</button>`:''}</div>
+  ${cfg.bancos.length?`<div class="acts"><button class="btn g" onclick="puxarTudo()">Trazer o histórico inteiro</button></div>
+  <p class="hint" style="padding-left:0">Esquece até onde já veio e pede de novo os últimos 12 meses. O que já está lançado é reconhecido e vem desmarcado.</p>`:''}
   <div class="acts fim"><button class="btn g" onclick="abrirAjustes()">Voltar</button></div>`);
+}
+function puxarTudo(){
+  cfg.bancos.forEach(b=>{b.desde=''});
+  cfg.syncTs=0;salvarCfg();
+  sincronizar();
 }
 function salvarSync(testa){
   cfg.wkUrl=(val('sy_u')||'').trim().replace(/\/+$/,'');
@@ -1535,14 +1543,15 @@ const RESETS={
     some:'Todo gasto lançado ou importado.',
     fica:'Salário e outras entradas, aportes, contas, cartões, categorias, investimentos e metas.',
     faz:()=>{Object.keys(meses).forEach(k=>{
-      meses[k]=(meses[k]||[]).filter(t=>t.t!=='d'); if(!meses[k].length)delete meses[k]})}
+      meses[k]=(meses[k]||[]).filter(t=>t.t!=='d'); if(!meses[k].length)delete meses[k]});
+      cfg.bancos.forEach(b=>{b.desde=''})}
   },
   lanc:{
     nome:'Apagar os lançamentos',
     conta:()=>todos().length+(todos().length===1?' lançamento':' lançamentos'),
     some:'Todo gasto, entrada e aporte que você registrou ou importou.',
     fica:'Contas, cartões, categorias, investimentos e metas continuam como estão.',
-    faz:()=>{meses={}}
+    faz:()=>{meses={};cfg.bancos.forEach(b=>{b.desde=''})}
   },
   aberturas:{
     nome:'Zerar o saldo anterior dos cartões',
