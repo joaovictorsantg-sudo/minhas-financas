@@ -195,7 +195,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v41 — 24/11';
+const VERSAO='v42 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -755,10 +755,10 @@ function formLanc(){
   h+=`<label>Descrição, se quiser</label><input id="f_desc" placeholder="${t==='d'?'posto, iFood, cinema':t==='r'?'salário de novembro':'aporte mensal'}" value="${esc(fl.desc)}">
   <div class="two"><div><label>${t==='r'?'Caiu em':'Saiu de'}</label><select id="f_pg" onchange="guardaForm();formLanc()">${pgs.map(p=>`<option value="${p.id}" ${fl.pg===p.id?'selected':''}>${p.n}</option>`).join('')}</select></div>
   <div><label>Data</label><input id="f_data" type="date" value="${esc(fl.data)}"></div></div>`;
-  if(t==='a'&&conta(fl.pg)&&cfg.bancos.length)h+=`<div class="ilin" style="border-bottom:0;margin-top:4px" onclick="alternaJaSaiu()">
+  if(t==='a'&&cfg.bancos.length)h+=`<div class="ilin" style="border-bottom:0;margin-top:4px" onclick="alternaJaSaiu()">
     <button class="ick" style="${fl.jaSaiu?'':'background:none;border-color:var(--line2)'}">${fl.jaSaiu?'✓':''}</button>
-    <div class="imid"><div class="t1">Esse dinheiro já saiu da conta</div>
-    <div class="t2">O banco já descontou da conta quando você aplicou. Deixe marcado para o aporte entrar no investido sem derrubar o saldo de novo.</div></div></div>`;
+    <div class="imid"><div class="t1">O banco já sabe deste aporte</div>
+    <div class="t2">A conta já foi descontada e o dinheiro já está na posição que vem da corretora. Marcado, ele conta no investido do mês sem mexer no saldo nem no total aplicado.</div></div></div>`;
   if(t==='d'&&cartao(fl.pg))h+=`<label>Parcelas</label><select id="f_parc">${Array.from({length:18},(_,i)=>`<option value="${i+1}" ${+fl.parc===i+1?'selected':''}>${i===0?'À vista':(i+1)+'x'}</option>`).join('')}</select>`;
   h+=`<div class="acts fim"><button class="btn" onclick="salvarLanc()">Salvar</button></div>`;
   abrir(h);
@@ -779,14 +779,16 @@ function salvarLanc(){
   if(fl.t==='a'){if(!a)return toast('Escolha o investimento');tx.ativo=a.id}else tx.cat=fl.cat||(fl.t==='r'?'extra':'outros');
   if(fl.t==='d'&&cartao(fl.pg))tx.parc=+fl.parc||1;
   const k=mk(tx.data);meses[k]=(meses[k]||[]).concat(tx);
-  // o saldo do banco já reflete a saída: compensa no ponto de partida para
-  // o mesmo dinheiro não sair duas vezes da conta
-  if(fl.t==='a'&&fl.jaSaiu){const c=conta(fl.pg);if(c){c.saldo=r2((+c.saldo||0)+v);tx.js=1}}
-  if(a){
+  // o banco já reflete os dois lados: o dinheiro saiu da conta e entrou na
+  // posição. Registrar aqui serve ao investido do mês, não ao patrimônio.
+  const jaLa=fl.t==='a'&&fl.jaSaiu;
+  if(jaLa){const c=conta(fl.pg);if(c)c.saldo=r2((+c.saldo||0)+v);tx.js=1}
+  if(a&&!jaLa){
     if(erv){const q=num(fl.q),nq=r4((+a.qtd||0)+q);a.pm=r4((custoAtivo(a)+v)/nq);a.qtd=nq;if(!a.cot)a.cot=num(fl.pu);tx.q=q}
     else a.atual=r2((+a.atual||0)+v);
     gravar('fin/config',cfg);
   }
+  if(jaLa&&erv)tx.q=num(fl.q); // guarda as cotas do aporte sem mexer na posição
   salvarMes(k);fechar();
   toast(tx.parc>1?`Lançado em ${tx.parc}x de ${brl(v/tx.parc)}`:'Lançado');
 }

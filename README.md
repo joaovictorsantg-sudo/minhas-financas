@@ -123,9 +123,10 @@ gasta nelas. Gastar menos que o disponível não vira licença para gastar
 mais — aí o orçamento é o próprio histórico, e a diferença fica como
 folga.
 
-Aporte em conta sincronizada não desconta o saldo de novo: o banco já
-descontou quando o dinheiro saiu, e o registro serve para o mês saber
-quanto foi investido.
+Aporte de dinheiro que o banco já conhece não mexe em saldo nem em
+posição: a conta já foi descontada e o valor já está na posição que vem
+da corretora. O registro serve para o mês saber quanto foi investido,
+que é a única parte que não dá para deduzir do que o banco informa.
 
 Orçamento não definido não é orçamento de zero. Sem ele a tela de
 planejamento mostra o gasto do mês e convida a definir um, em vez de
