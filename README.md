@@ -41,6 +41,18 @@ saldos das contas e o orçamento por categoria, e cadastre os cartões na aba
 *Cartões*. Se você já tem um backup, é mais rápido restaurar por
 **Ajustes → Backup → Restaurar backup**.
 
+## Importar extrato do banco
+
+Em *Extrato* há o botão **Importar extrato do banco**. Ele lê arquivos
+**OFX** e **CSV** — formatos que Inter, Bradesco, PicPay e a maioria dos
+bancos oferecem na tela de extrato.
+
+O app adivinha a categoria pela descrição, marca o que já foi lançado
+antes para não duplicar, e deixa você revisar linha a linha antes de
+confirmar. Escolha no topo se aquele extrato é de uma conta ou de um
+cartão; em cartão, os pagamentos de fatura são ignorados, já que não são
+gastos novos.
+
 ## Onde ficam os dados
 
 Tudo no `localStorage` do aparelho. Nada sai dali: não há servidor, conta nem

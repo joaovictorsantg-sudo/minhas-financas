@@ -157,6 +157,16 @@ input.big{font-size:30px;font-weight:600;letter-spacing:-.03em;padding:12px 13px
 .seg button.on{background:var(--acc);color:var(--accInk);font-weight:600}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.ilin{display:flex;gap:10px;align-items:flex-start;padding:11px 0;border-bottom:1px solid var(--line)}
+.ilin.off{opacity:.38}
+.ick{flex:none;width:26px;height:26px;margin-top:2px;border-radius:8px;border:1.5px solid var(--line2);
+  background:none;color:var(--accInk);font-size:15px;line-height:1;cursor:pointer;padding:0}
+.ilin:not(.off) .ick{background:var(--acc);border-color:var(--acc)}
+.imid{flex:1;min-width:0}
+.imid .t1{font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.imid .t2{font-size:12px;color:var(--mute);margin-top:2px}
+.iend{flex:none;text-align:right;max-width:44%}
+.icat{font-size:12px;padding:5px 6px;border-radius:8px;margin-top:5px;width:auto;max-width:100%}
 .catrow{display:grid;grid-template-columns:44px minmax(0,1fr) 78px 30px;gap:6px;align-items:center;margin:7px 0}
 .catrow input{padding:9px 6px;font-size:15px;border-radius:9px;min-width:0}
 .catrow input:first-child{padding:9px 2px}
@@ -181,7 +191,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='24/11 08:50';
+const VERSAO='24/11 09:00';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -479,10 +489,12 @@ lanc(){
   let itens=doMes(st.mes);if(st.filtro)itens=itens.filter(({tx})=>tx.cat===st.filtro);
   let h=mnav();
   if(st.filtro)h+=`<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><span class="tag">${catInfo(st.filtro).emoji} ${esc(catInfo(st.filtro).nome)}</span><button class="btn g s" onclick="st.filtro='';render()">Ver tudo</button></div>`;
-  if(!itens.length)return h+`<div class="grp"><div class="blank">Nada lançado em ${nomeMes(st.mes)}.<div style="margin-top:16px"><button class="btn s" onclick="novo('d')">Lançar um gasto</button></div></div></div>`;
+  const btImp=`<div class="acts"><button class="btn g" onclick="document.getElementById('ext').click()">Importar extrato do banco</button></div>
+  <input type="file" id="ext" style="display:none" onchange="lerExtrato(this)">`;
+  if(!itens.length)return h+`<div class="grp"><div class="blank">Nada lançado em ${nomeMes(st.mes)}.<div style="margin-top:16px"><button class="btn s" onclick="novo('d')">Lançar um gasto</button></div></div></div>`+btImp;
   const tot=r2(itens.reduce((s,{tx,p})=>s+(tx.t==='r'?p.v:-p.v),0));
   h+=`<div class="grp"><div class="pad" style="display:flex;align-items:baseline;padding-bottom:16px"><span class="lbl">${itens.length} ${itens.length===1?'lançamento':'lançamentos'}</span><span style="flex:1"></span><span class="vmid ${tot<0?'':'up'}">${money(tot)}</span></div></div>
-  <div class="grp"><div class="rows">`+itens.map(linha).join('')+`</div></div>`;
+  <div class="grp"><div class="rows">`+itens.map(linha).join('')+`</div></div>`+btImp;
   return h;
 },
 cartoes(){
@@ -740,6 +752,153 @@ function formSaldo(id){const a=ativo(id);
   <label>Saldo atual</label><input id="s_v" class="big" inputmode="decimal" value="${n2(a.atual||0)}">
   <div class="acts fim"><button class="btn g" onclick="fechar()">Cancelar</button><button class="btn" onclick="salvarSaldo('${id}')">Salvar</button></div>`)}
 function salvarSaldo(id){const v=num(val('s_v'));if(!(v>=0))return toast('Valor inválido');ativo(id).atual=r2(v);salvarCfg();fechar()}
+
+
+/* ---------- importar extrato (OFX e CSV) ---------- */
+const REGRAS=[
+ {re:/posto|shell|ipiranga|petrobr|combust|gasolin|ale sat|br mania/i, ids:['gasolina','transp','transporte']},
+ {re:/ifood|rappi|mcdonal|burger|pizz|restaur|lanchon|padar|subway|habib|cafe|coffee|starbucks|outback/i, ids:['alim','alimentacao','comida']},
+ {re:/supermerc|mercado|assa[ií]|atacad|carrefour|condor|muffato|festval|big\b|hortifr/i, ids:['alim','casa']},
+ {re:/uber|99app|99\s*tecnolog|cabify|urbs|onibus|metr[oô]|bilhete/i, ids:['transp','transporte','gasolina']},
+ {re:/netflix|spotify|youtube|prime\s*video|disney|hbo|max\b|crunchyroll|deezer|icloud|apple\.com|google\s*(one|play)|chatgpt|openai/i, ids:['assin','assinaturas']},
+ {re:/faculdade|mensalidade|universid|facul|\bfae\b|curso|alura|udemy/i, ids:['faculdade','estudos','educacao']},
+ {re:/farmac|drogar|droga\s*raia|pacheco|panvel|nissei|clinic|laborat|hospital/i, ids:['saude']},
+ {re:/steam|playstation|xbox|nintendo|cinema|cinemark|ingresso|showtime|bar\b|cervej/i, ids:['lazer']},
+ {re:/renner|riachuelo|zara|cea|c&a|nike|adidas|shopee|shein|mercadolivre|mercado\s*livre|amazon|magalu|aliexpress/i, ids:['compras']},
+ {re:/luz|copel|sanepar|energia|agua|internet|vivo|claro|tim\b|oi\s*fibra|aluguel|condom/i, ids:['casa','contas']},
+];
+function categorizar(desc,ehEntrada){
+  if(ehEntrada)return /sal[aá]rio|salario|remunera|folha|proventos/i.test(desc)?'salario':'extra';
+  for(const r of REGRAS) if(r.re.test(desc))
+    for(const id of r.ids) if(cfg.categorias.some(c=>c.id===id)) return id;
+  return (cfg.categorias.find(c=>c.id==='outros')||cfg.categorias[cfg.categorias.length-1]||{}).id||'outros';
+}
+const limpaDesc=d=>String(d||'').replace(/\s+/g,' ').replace(/^\W+|\W+$/g,'').slice(0,60)||'Lançamento';
+const chaveTx=t=>t.fit?('f:'+t.fit):('h:'+t.data+'|'+t.v.toFixed(2)+'|'+limpaDesc(t.desc).toLowerCase().slice(0,24));
+
+function parseOFX(txt){
+  const out=[];
+  const blocos=txt.split(/<STMTTRN>/i).slice(1);
+  for(const b of blocos){
+    const g=t=>{const m=new RegExp('<'+t+'>([^<\\r\\n]*)','i').exec(b);return m?m[1].trim():''};
+    const dt=g('DTPOSTED')||g('DTAVAIL'), amt=g('TRNAMT');
+    if(!dt||!amt)continue;
+    const d=dt.replace(/[^0-9]/g,'');
+    if(d.length<8)continue;
+    const v=parseFloat(amt.replace(/\./g,m=>'.').replace(',','.'));
+    if(!isFinite(v)||v===0)continue;
+    out.push({data:d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8),v,
+      desc:limpaDesc(g('MEMO')||g('NAME')),fit:g('FITID')});
+  }
+  return out;
+}
+function numBR(x){
+  let t=String(x||'').replace(/["']/g,'').replace(/R\$|\s/g,'').trim();
+  if(!t)return NaN;
+  const neg=/^-/.test(t)||/\)$/.test(t); t=t.replace(/[()\-]/g,'');
+  if(/,\d{1,2}$/.test(t)) t=t.replace(/\./g,'').replace(',','.');
+  else t=t.replace(/,/g,'');
+  const v=parseFloat(t); return isFinite(v)?(neg?-v:v):NaN;
+}
+function dataBRtoISO(x){
+  const t=String(x||'').trim();
+  let m=/^(\d{4})-(\d{2})-(\d{2})/.exec(t); if(m)return m[1]+'-'+m[2]+'-'+m[3];
+  m=/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/.exec(t);
+  if(m){let a=m[3];if(a.length===2)a='20'+a;return a+'-'+p2(+m[1]>12?+m[2]:+m[2])+'-'+p2(m[1])}
+  return '';
+}
+function parseCSV(txt){
+  const linhas=txt.split(/\r?\n/).filter(l=>l.trim());
+  if(!linhas.length)return [];
+  const sep=[';','\t',','].map(c=>({c,n:(linhas[0].split(c).length+(linhas[1]||'').split(c).length)}))
+    .sort((a,b)=>b.n-a.n)[0].c;
+  const corta=l=>{const r=[];let cur='',asp=false;
+    for(const ch of l){if(ch==='"'){asp=!asp}else if(ch===sep&&!asp){r.push(cur);cur=''}else cur+=ch}
+    r.push(cur);return r.map(x=>x.trim())};
+  // acha o cabeçalho
+  let iCab=-1,cols=null;
+  for(let i=0;i<Math.min(linhas.length,15);i++){
+    const c=corta(linhas[i]).map(x=>x.toLowerCase());
+    const d=c.findIndex(x=>/^data|date|lan[çc]amento/.test(x));
+    const v=c.findIndex(x=>/valor|amount|cr[ée]dito|d[ée]bito/.test(x));
+    if(d>=0&&v>=0){iCab=i;cols={d,v,
+      t:c.findIndex(x=>/descri|hist[oó]ric|t[ií]tulo|title|estabelec|memo|detalhe/.test(x))};break}
+  }
+  const out=[];
+  const inicio=iCab>=0?iCab+1:0;
+  for(let i=inicio;i<linhas.length;i++){
+    const c=corta(linhas[i]); if(c.length<2)continue;
+    let data,v,desc;
+    if(cols){data=dataBRtoISO(c[cols.d]);v=numBR(c[cols.v]);desc=cols.t>=0?c[cols.t]:c.find((x,j)=>j!==cols.d&&j!==cols.v&&x)||''}
+    else{ // sem cabeçalho: primeira coluna data, última numérica o valor
+      data=dataBRtoISO(c[0]);
+      let j=-1;for(let k=c.length-1;k>0;k--){if(isFinite(numBR(c[k]))){j=k;break}}
+      if(j<0)continue; v=numBR(c[j]); desc=c.slice(1,j).join(' ');
+    }
+    if(!data||!isFinite(v)||v===0)continue;
+    out.push({data,v,desc:limpaDesc(desc),fit:''});
+  }
+  return out;
+}
+let imp=null;
+function lerExtrato(inp){
+  const f=inp.files&&inp.files[0]; if(!f)return;
+  const fr=new FileReader();
+  fr.onerror=()=>toast('Não deu para abrir o arquivo');
+  fr.onload=()=>{
+    inp.value='';
+    const txt=String(fr.result||'');
+    let itens=/<STMTTRN>/i.test(txt)?parseOFX(txt):parseCSV(txt);
+    if(!itens.length)return toast('Não encontrei lançamentos nesse arquivo');
+    itens.sort((a,b)=>a.data.localeCompare(b.data));
+    const jaTem=new Set(todos().map(t=>t.k).filter(Boolean));
+    const destino=(cfg.cartoes[0]||cfg.contas[0]||{}).id;
+    imp={pg:destino, itens:itens.map(t=>{
+      const k=chaveTx(t), dup=jaTem.has(k);
+      return {...t,k,dup,usar:!dup,cat:categorizar(t.desc,t.v>0)};
+    })};
+    formImportar();
+  };
+  fr.readAsText(f,'ISO-8859-1');
+}
+function trocaDestino(){const e=$('#ip_pg');if(e)imp.pg=e.value;formImportar()}
+function alterna(i){imp.itens[i].usar=!imp.itens[i].usar;formImportar()}
+function mudaCat(i,v){imp.itens[i].cat=v}
+function formImportar(){
+  const ehCartao=!!cartao(imp.pg);
+  const usados=imp.itens.filter(t=>t.usar).length, dups=imp.itens.filter(t=>t.dup).length;
+  const opts=[...cfg.cartoes.map(c=>({id:c.id,n:'💳 '+c.nome})),...cfg.contas.map(c=>({id:c.id,n:c.emoji+' '+c.nome}))];
+  let h=cab('Importar extrato')+
+  `<label>Esses lançamentos são de</label><select id="ip_pg" onchange="trocaDestino()">${opts.map(o=>`<option value="${o.id}" ${imp.pg===o.id?'selected':''}>${o.n}</option>`).join('')}</select>
+  <p class="hint" style="padding-left:0">${imp.itens.length} encontrados${dups?', '+dups+' já estavam lançados':''}. Desmarque o que não quiser.</p>`;
+  imp.itens.forEach((t,i)=>{
+    const ent=t.v>0, pag=ehCartao&&ent;
+    h+=`<div class="ilin ${t.usar?'':'off'}">
+      <button class="ick" onclick="alterna(${i})" aria-label="${t.usar?'Tirar':'Incluir'}">${t.usar?'✓':''}</button>
+      <div class="imid"><div class="t1">${esc(t.desc)}</div>
+        <div class="t2">${dataBR(t.data)}${t.dup?' · já lançado':''}${pag?' · pagamento de fatura':''}</div></div>
+      <div class="iend"><div class="vmid ${ent?'up':''}">${ent?'+':'−'}${brl(Math.abs(t.v))}</div>
+        ${!ent||!ehCartao?`<select class="icat" onchange="mudaCat(${i},this.value)">${(ent?RECS:cfg.categorias).map(c=>`<option value="${c.id}" ${t.cat===c.id?'selected':''}>${c.emoji} ${esc(c.nome)}</option>`).join('')}</select>`:''}</div></div>`;
+  });
+  h+=`<div class="acts fim"><button class="btn g" onclick="fechar()">Cancelar</button>
+  <button class="btn" onclick="confirmarImport()">Importar ${usados}</button></div>`;
+  abrir(h);
+}
+function confirmarImport(){
+  const ehCartao=!!cartao(imp.pg);
+  const porMes={}; let n=0;
+  imp.itens.filter(t=>t.usar).forEach(t=>{
+    const ent=t.v>0;
+    if(ehCartao&&ent)return; // pagamento de fatura não é lançamento
+    const tx={id:uid(),t:ent?'r':'d',v:r2(Math.abs(t.v)),desc:t.desc,
+      cat:t.cat||categorizar(t.desc,ent),pg:imp.pg,data:t.data,k:t.k};
+    const k=mk(t.data); (porMes[k]=porMes[k]||[]).push(tx); n++;
+  });
+  if(!n){fechar();return toast('Nada marcado para importar')}
+  Object.keys(porMes).forEach(k=>{meses[k]=(meses[k]||[]).concat(porMes[k])});
+  cache();imp=null;fechar();render();
+  toast(n+(n===1?' lançamento importado':' lançamentos importados'));
+}
 
 /* ---------- cartões ---------- */
 const CORES=['#ff7a00','#21c25e','#cc092f','#8a05be','#ec7000','#0057b8','#f5b13d','#45d9a0'];
