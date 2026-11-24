@@ -195,7 +195,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v29 — 24/11';
+const VERSAO='v30 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1113,6 +1113,21 @@ function casaAtivo(i){
   return porNome?porNome.id:'';
 }
 const ehAcao=i=>/EQUITY|ETF/i.test(i.tipo||'')&&(+i.cotas>0);
+// o Porquinho do Inter abre um CDB por depósito: dezenas de linhas de R$ 13
+// virariam dezenas de ativos. Mesmo nome, mesma aplicação — junta numa só.
+function agrupaRF(is){
+  const out=[], achados={};
+  for(const i of is){
+    const k=ehAcao(i)?'':semAcento(i.nome||'').replace(/[^a-z0-9]/gi,'');
+    const g=k&&achados[k];
+    if(!g){ if(k)achados[k]=i; out.push(i); continue }
+    g.saldo=r2((+g.saldo||0)+(+i.saldo||0));
+    if(i.aplicado!=null)g.aplicado=r2((+g.aplicado||0)+(+i.aplicado));
+    g.juntos=(g.juntos||1)+1;
+    g.cotas=null; g.unitario=null;
+  }
+  return out;
+}
 function mapeiaInv(pid,aid){
   const i=(imp.invs||[]).find(x=>x.id===pid); if(!i)return;
   i.ativo=aid; formImportar();
@@ -1158,7 +1173,7 @@ function blocoInvs(){
   is.forEach(i=>{
     h+=`<div class="ilin" style="align-items:center">
       <div class="imid"><div class="t1">${esc(i.codigo&&ehAcao(i)?i.codigo:i.nome)}</div>
-      <div class="t2">${brl(i.saldo)}${+i.cotas>0?' · '+i.cotas+' cotas':''}${i.aplicado!=null?' · aplicado '+brl(i.aplicado):''}</div></div>
+      <div class="t2">${brl(i.saldo)}${ehAcao(i)?' · '+i.cotas+' cotas':''}${i.juntos?' · '+i.juntos+' aplicações':''}${i.aplicado!=null?' · aplicado '+brl(i.aplicado):''}</div></div>
       <select onchange="mapeiaInv('${i.id}',this.value)" style="width:auto;max-width:46%;font-size:13px;padding:7px 8px">
         <option value="" ${!i.ativo?'selected':''}>criar novo</option>
         ${cfg.ativos.map(a=>`<option value="${a.id}" ${i.ativo===a.id?'selected':''}>${esc(a.nome)}</option>`).join('')}
@@ -1531,6 +1546,9 @@ async function sincronizar(auto){
     let contas;
     try{ contas=(await wk('/contas',{itemId:b.id})).contas||[] }
     catch(e){ erros.push({b:b.nome||'Banco',m:msgErro(e.message)}); continue }
+    // lista vazia não é erro, mas é o motivo de nenhum extrato aparecer
+    if(!contas.length)erros.push({b:b.nome||'Banco',
+      m:'o banco não devolveu nenhuma conta. Se ele só mostrou investimentos, a conexão no meu.pluggy.ai provavelmente não autorizou conta corrente e cartão'});
     for(const c of contas){
       const pg=destinoPluggy(b,c);
       achadas.push({pid:c.id,banco:b.id,nome:c.nome,marca:c.banco,tipo:c.tipo,
@@ -1547,20 +1565,21 @@ async function sincronizar(auto){
       }
     }
   }
+  const invsAg=agrupaRF(invs);
   cfg.syncTs=Date.now();cache();
   sincronizando=false;
   const semDestino=achadas.filter(a=>!a.pg).length;
-  if(!itens.length&&!semDestino&&!invs.length){
+  if(!itens.length&&!semDestino&&!invsAg.length){
     if(erros.length)return auto?null:toast('Não deu para trazer de '+erros[0].b+': '+erros[0].m);
     return auto?null:toast('Nada novo para trazer');
   }
   itens.sort((a,b)=>a.data.localeCompare(b.data));
   const montado={pg:(itens[0]||{}).pg||(cfg.contas[0]||{}).id,inv:false,saldo:null,ajusta:false,
-    sync:true,achadas,invs,erros,acertar:true,itens:itens.map(t=>{
+    sync:true,achadas,invs:invsAg,erros,acertar:true,itens:itens.map(t=>{
     const k=chaveTx(t), dup=todos().some(x=>x.k===k), nat=natureza(t.desc);
     return {...t,k,dup,nat,quita:null,met:'',usar:!dup&&!nat,cat:categorizar(t.desc,t.v>0)};
   })};
-  const novos=montado.itens.filter(t=>t.usar).length+semDestino+invs.length;
+  const novos=montado.itens.filter(t=>t.usar).length+semDestino+invsAg.length;
   if(auto){
     if(!novos){pend=null;render();return}      // só repetidos: nada a fazer
     if(cfg.syncDireto){imp=montado;confirmarImport();return}

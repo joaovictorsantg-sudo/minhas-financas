@@ -101,6 +101,11 @@ investido vai ficar e avisa quais posições suas não casaram com nenhuma
 do banco — é assim que se percebe que a mesma aplicação está prestes a
 entrar duas vezes.
 
+Renda fixa com o mesmo nome entra numa linha só: o Porquinho do Inter
+abre um CDB por depósito, e sem juntar eles o app ganharia dezenas de
+ativos de treze reais. Cotas aparecem apenas em ação, onde querem dizer
+alguma coisa.
+
 Quando um banco falha e outro funciona, a revisão diz qual falhou e por
 quê. Sem isso a falha passava calada: bastava o banco devolver os
 investimentos para a tela abrir como se tudo tivesse vindo, e o extrato
