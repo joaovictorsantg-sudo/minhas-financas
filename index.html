@@ -46,7 +46,8 @@ main{padding:0 16px;max-width:600px;margin:0 auto}
 
 /* navegação de mês */
 .mnav{display:flex;align-items:center;gap:4px;margin:4px 0 14px}
-.mnav b{font-size:15px;font-weight:600;text-transform:capitalize;letter-spacing:-.01em}
+.mnav b{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.mnav b::first-letter{text-transform:uppercase}
 .mnav .sp{flex:1}
 .mnav button{width:34px;height:34px;border:0;border-radius:10px;background:transparent;color:var(--ink2);cursor:pointer;display:grid;place-items:center}
 .mnav button:active{background:var(--surf)}
