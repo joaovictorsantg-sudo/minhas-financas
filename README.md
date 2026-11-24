@@ -101,6 +101,11 @@ investido vai ficar e avisa quais posições suas não casaram com nenhuma
 do banco — é assim que se percebe que a mesma aplicação está prestes a
 entrar duas vezes.
 
+Lançamento que aponta para uma conta apagada é sinalizado na tela
+inicial, com a opção de mandar para outra conta ou apagar. Ele continuava
+somando no mês e em nenhum saldo, o que faz o dinheiro em conta aparecer
+como zero sem explicação.
+
 Conta ou cartão que o banco traz pode ser criado ali mesmo, com nome,
 limite e datas de fechamento vindos dele. Sem isso, quem ainda não tinha
 cadastrado nada abria uma lista vazia e não tinha o que apontar.

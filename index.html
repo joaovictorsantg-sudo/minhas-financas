@@ -195,7 +195,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v32 — 24/11';
+const VERSAO='v33 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -431,6 +431,9 @@ function saldoConta(id){
   return r2(s);
 }
 const totalContas=()=>r2(cfg.contas.reduce((s,c)=>s+saldoConta(c.id),0));
+// lançamento cujo destino sumiu: zerar a configuração apaga as contas e
+// deixa os lançamentos apontando para um id que não existe mais
+const orfaos=()=>todos().filter(t=>!conta(t.pg)&&!cartao(t.pg));
 const valAtivo=a=>a.rv?r2((+a.qtd||0)*(+a.cot||0)):r2(+a.atual||0);
 function custoAtivo(a){
   if(a.rv)return r2((+a.qtd||0)*(+a.pm||0));
@@ -489,6 +492,8 @@ inicio(){
   <div><span class="lbl">Investido</span><b class="up">${money(totalInvest())}</b></div>
   <div><span class="lbl">Cartões</span><b class="${totalCartoes()>0?'down':''}">${totalCartoes()>0?'−':''}${money(totalCartoes())}</b></div></div></div>`;
 
+  const orf=orfaos();
+  if(orf.length)h+=`<div class="note" style="border-left-color:var(--bad)"><b>${orf.length} lançamento${orf.length===1?'':'s'} sem conta</b>Apontam para uma conta ou cartão que não existe mais, então entram no somatório do mês mas não no saldo de ninguém. <a onclick="formOrfaos()">Resolver</a></div>`;
   h+=`<h2>Contas<span class="sp"></span><a onclick="abrirAjustes()">ajustar saldo</a></h2><div class="grp"><div class="rows">`;
   cfg.contas.forEach(c=>{const s=saldoConta(c.id);
     h+=`<button class="row" onclick="abrirAjustes()"><span class="ico">${c.emoji}</span><span class="mid"><span class="t1">${esc(c.nome)}</span></span><span class="end vmid ${s<0?'down':''}">${money(s)}</span></button>`});
@@ -1263,6 +1268,28 @@ function aplicaContas(){
     }
   });
   return n;
+}
+function formOrfaos(){
+  const o=orfaos(); if(!o.length)return;
+  const ent=o.filter(t=>t.t==='r').length;
+  abrir(cab('Lançamentos sem conta')+
+  `<p class="hint" style="padding-left:0">${o.length} lançamento${o.length===1?'':'s'} (${ent} entrada${ent===1?'':'s'}) apontam para uma conta que foi apagada. Escolha para onde vão, ou apague.</p>
+   <label>Mandar para</label>
+   <select id="or_pg">${cfg.contas.map(c=>`<option value="${c.id}">${c.emoji||'🏦'} ${esc(c.nome)}</option>`).join('')}
+   ${cfg.cartoes.map(c=>`<option value="${c.id}">💳 ${esc(c.nome)}</option>`).join('')}</select>
+   <div class="acts"><button class="btn g" onclick="fechar()">Cancelar</button>
+   <button class="btn g" onclick="apagaOrfaos()">Apagar os ${o.length}</button>
+   <button class="btn p" onclick="moveOrfaos()">Mandar para lá</button></div>`);
+}
+function moveOrfaos(){
+  const pg=val('or_pg'); if(!pg)return;
+  const o=orfaos(); o.forEach(t=>{t.pg=pg});
+  cache();fechar();render();toast(o.length+' lançamento'+(o.length===1?' movido':'s movidos'));
+}
+function apagaOrfaos(){
+  const ids=new Set(orfaos().map(t=>t.id)); if(!ids.size)return;
+  Object.keys(meses).forEach(k=>{meses[k]=meses[k].filter(t=>!ids.has(t.id))});
+  cache();fechar();render();toast(ids.size+' lançamento'+(ids.size===1?' apagado':'s apagados'));
 }
 function formImportar(){
   const ehCartao=!!cartao(imp.pg);
