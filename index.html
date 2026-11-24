@@ -195,7 +195,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v31 — 24/11';
+const VERSAO='v32 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -332,7 +332,14 @@ function importar(inp){
     catch(e){inp.value='';return toast('Esse arquivo não é um backup. Procure o .json que termina com a data.')}
     if(!j||!j.cfg){inp.value='';return toast('Esse .json não é um backup deste app.')}
     try{
+      // a conexão com o banco é deste aparelho, não do backup: um backup
+      // antigo não pode desfazer o que já está ligado aqui
+      const liga={wkUrl:cfg.wkUrl,bancos:cfg.bancos,syncAuto:cfg.syncAuto,syncDireto:cfg.syncDireto};
       cfg=Object.assign(clone(DEF),j.cfg);meses=j.meses||{};rasc=null;
+      if(liga.wkUrl&&!(j.cfg.wkUrl||''))cfg.wkUrl=liga.wkUrl;
+      if((liga.bancos||[]).length&&!((j.cfg.bancos||[]).length)){
+        cfg.bancos=liga.bancos;cfg.syncAuto=liga.syncAuto;cfg.syncDireto=liga.syncDireto;
+      }
       cache();inp.value='';fechar();render();
       const n=cfg.cartoes.length,a=cfg.ativos.length;
       toast('Restaurado: '+n+' cart'+(n===1?'ão':'ões')+' e '+a+' investimento'+(a===1?'':'s'));
@@ -1096,8 +1103,27 @@ function inverter(){imp.inv=!imp.inv;
   formImportar();toast(imp.inv?'Sinais invertidos':'Sinais como vieram')}
 function alterna(i){imp.itens[i].usar=!imp.itens[i].usar;formImportar()}
 function mudaCat(i,v){imp.itens[i].cat=v}
+// nome do banco em caixa de título: BANCO INTER S.A -> Banco Inter
+function titulo(t){
+  return String(t||'').toLowerCase().replace(/\b[a-zà-ú]/g,c=>c.toUpperCase())
+    .replace(/\s+(s\.?a\.?|ltda\.?|instituicao de paga\w*)\b/ig,'').trim().slice(0,24)||'Novo';
+}
+// cria a conta ou o cartão a partir do que o banco mandou, para quem ainda
+// não tem nada cadastrado e não teria o que escolher na lista
+function criaDoBanco(a){
+  const b=cfg.bancos.find(x=>x.id===a.banco)||{};
+  const nome=titulo(a.marca||a.nome||b.nome);
+  if(a.tipo==='CREDIT'){
+    const c={id:'c_'+uid(),nome,limite:r2(+a.limite||0),fecha:+a.fecha||1,vence:+a.vence||10,
+      conta:(cfg.contas[0]||{}).id,cor:CORES[cfg.cartoes.length%CORES.length],aberturas:{}};
+    cfg.cartoes.push(c); return c.id;
+  }
+  const c={id:'ct_'+uid(),emoji:'🏦',nome,saldo:0};
+  cfg.contas.push(c); return c.id;
+}
 function mapeia(pid,pg){
   const a=(imp.achadas||[]).find(x=>x.pid===pid); if(!a)return;
+  if(pg==='+'){pg=criaDoBanco(a);toast('Criado: '+((cartao(pg)||conta(pg)||{}).nome||''))}
   a.pg=pg;
   const b=cfg.bancos.find(x=>x.id===a.banco);
   if(b){b.mapa=b.mapa||{};if(pg)b.mapa[pid]=pg;else delete b.mapa[pid];salvarCfg()}
@@ -1202,6 +1228,7 @@ function blocoContas(){
       <select onchange="mapeia('${a.pid}',this.value)" style="width:auto;max-width:48%;font-size:13px;padding:7px 8px">
         <option value="">— escolher —</option>
         ${alvos.map(x=>`<option value="${x.id}" ${a.pg===x.id?'selected':''}>${x.emoji||'💳'} ${esc(x.nome)}</option>`).join('')}
+        <option value="+">+ criar ${a.tipo==='CREDIT'?'cartão':'conta'} no app</option>
       </select></div>`;
   });
   h+=`<div class="ilin" style="border-bottom:0" onclick="imp.acertar=!imp.acertar;formImportar()">

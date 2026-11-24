@@ -101,6 +101,14 @@ investido vai ficar e avisa quais posições suas não casaram com nenhuma
 do banco — é assim que se percebe que a mesma aplicação está prestes a
 entrar duas vezes.
 
+Conta ou cartão que o banco traz pode ser criado ali mesmo, com nome,
+limite e datas de fechamento vindos dele. Sem isso, quem ainda não tinha
+cadastrado nada abria uma lista vazia e não tinha o que apontar.
+
+Restaurar um backup preserva a conexão com o banco: ela é deste aparelho
+e não do arquivo, e um backup gravado antes de conectar não deve desfazer
+o que já está ligado.
+
 Conta que o banco traz e o app ainda não conhece fica esperando um
 destino, e só depois de apontado o extrato dela é buscado — desde o
 começo, não a partir da data em que foi apontada. A marca de "já li até
