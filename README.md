@@ -154,9 +154,12 @@ Orçamento não definido não é orçamento de zero. Sem ele a tela de
 planejamento mostra o gasto do mês e convida a definir um, em vez de
 acusar estouro contra uma meta que ninguém escreveu.
 
-O saldo de um cartão é tudo o que se deve, não a fatura em aberto, e o
-ajuste que o aproxima do que o app calculou é refeito a cada
-sincronização em vez de somado. Saldos e faturas são atualizados mesmo
+A fatura do cartão vem pronta do banco: data de fechamento, de
+vencimento e total de cada mês. Ela manda sobre o ciclo deduzido, o que
+resolve sozinho a virada do dia de fechamento e o mês em que o banco não
+emitiu fatura nenhuma. O ajuste que completa a diferença entre o total
+do banco e os lançamentos já conhecidos é refeito a cada sincronização,
+nunca somado, e some conforme os lançamentos reais explicam o valor. Saldos e faturas são atualizados mesmo
 quando não há lançamento novo: eles mudam sozinhos.
 
 Repetido é reconhecido pelo id do banco e também pela data, valor e

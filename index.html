@@ -210,7 +210,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v51 — 24/11';
+const VERSAO='v52 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1454,8 +1454,46 @@ function blocoContas(){
   return h;
 }
 // aplica o que o banco diz sobre contas e cartões
-function aplicaContas(achadas){
+// A fatura que o banco emitiu vale mais que qualquer dedução de ciclo: ela traz
+// a data de fechamento, a de vencimento e o total de cada mês. O ajuste é
+// refeito a cada sincronização, nunca somado, e some conforme os lançamentos
+// reais vão explicando o valor.
+function aplicaFaturas(lista){
   let n=0;
+  (lista||[]).forEach(({pg,faturas:fs})=>{
+    const c=cartao(pg); if(!c||!(fs||[]).length)return;
+    c.datas=c.datas||{}; c.aberturas=c.aberturas||{};
+    if(c.auto&&c.auto.F){ c.aberturas[c.auto.F]=r2((+c.aberturas[c.auto.F]||0)-(+c.auto.v||0)); delete c.auto }
+    Object.keys(c.autoF||{}).forEach(F=>{c.aberturas[F]=r2((+c.aberturas[F]||0)-c.autoF[F])});
+    c.autoF={};
+    if(c.doBanco!==false)fs.forEach(bl=>{
+      const F=chaveFat(c,bl); if(!F||!bl.fecha||!bl.vence)return;
+      c.datas[F]={f:+bl.fecha.slice(8,10),v:+bl.vence.slice(8,10)};
+    });
+    const atuais=faturas(c); // só depois das datas, que mudam onde cada compra cai
+    fs.forEach(bl=>{
+      if(bl.total==null)return;
+      const F=chaveFat(c,bl); if(!F)return;
+      const v=r2(Math.abs(bl.total)-r2(atuais[F]||0));
+      if(Math.abs(v)<0.005)return;
+      c.aberturas[F]=r2((+c.aberturas[F]||0)+v); c.autoF[F]=v;
+    });
+    Object.keys(c.aberturas).forEach(K=>{if(Math.abs(c.aberturas[K])<0.005)delete c.aberturas[K]});
+    n++;
+  });
+  return n;
+}
+// a fatura é identificada pelo mês em que fecha; sem essa data, deduz do
+// vencimento usando o ciclo que o cartão já tem
+function chaveFat(c,bl){
+  if(bl.fecha)return bl.fecha.slice(0,7);
+  if(!bl.vence)return '';
+  const M=bl.vence.slice(0,7);
+  return venceDia(c,M)>fechaDia(c,M)?M:addM(M,-1);
+}
+function aplicaContas(achadas,comFatura){
+  let n=0;
+  const temFatura=new Set((comFatura||[]).map(x=>x.pg));
   (achadas||[]).forEach(a=>{
     if(!a.pg)return;
     if(a.tipo==='CREDIT'){
@@ -1471,7 +1509,8 @@ function aplicaContas(achadas){
       // medir contra uma fatura só empurra para ela a dívida das outras. E o
       // ajuste é refeito, não somado — senão cada sincronização empilha mais
       // um, e o do mês anterior fica congelado numa fatura que já passou.
-      if(a.saldo!=null&&c.doBanco!==false){
+      // o saldo é tudo o que se deve; se o banco já deu as faturas, elas mandam
+      if(a.saldo!=null&&c.doBanco!==false&&!temFatura.has(a.pg)){
         c.aberturas=c.aberturas||{};
         if(c.auto&&c.auto.F)c.aberturas[c.auto.F]=r2((+c.aberturas[c.auto.F]||0)-(+c.auto.v||0));
         const F=fatAberta(c), fs=faturas(c);
@@ -1674,7 +1713,8 @@ function confirmarImport(){
   }
   if(imp.sync){
     if(imp.acertar){
-      const n=aplicaContas(imp.achadas);if(n)msg+=', '+n+(n===1?' conta acertada':' contas acertadas');
+      const nf=aplicaFaturas(imp.fats);if(nf)msg+=', '+nf+(nf===1?' cartão com a fatura do banco':' cartões com a fatura do banco');
+      const n=aplicaContas(imp.achadas,imp.fats);if(n)msg+=', '+n+(n===1?' conta acertada':' contas acertadas');
       const v=aplicaInvestimentos();if(v)msg+=', '+v+(v===1?' investimento':' investimentos');
     }
     // só avança a marca das contas cujo extrato foi realmente lido: uma conta
@@ -1922,7 +1962,7 @@ async function sincronizar(auto){
   if(sincronizando)return;
   sincronizando=true;
   if(!auto)toast('Sincronizando…');
-  const itens=[], achadas=[], invs=[], erros=[];
+  const itens=[], achadas=[], invs=[], erros=[], contas_fat=[];
   for(const b of cfg.bancos){
     try{
       ((await wk('/investimentos',{itemId:b.id})).investimentos||[]).forEach(i=>{
@@ -1944,6 +1984,12 @@ async function sincronizar(auto){
       achadas.push({pid:c.id,banco:b.id,nome:c.nome,marca:c.banco,tipo:c.tipo,
         saldo:c.saldo,limite:c.limite,fecha:c.fecha,vence:c.vence,pg,pgIni:pg});
       if(!pg)continue; // sem destino: aparece na revisão para o usuário apontar
+      // num cartão, a fatura existe pronta: datas e total, sem deduzir ciclo
+      if(c.tipo==='CREDIT'&&cartao(pg)){
+        try{ const fs=(await wk('/faturas',{accountId:c.id})).faturas||[];
+             if(fs.length)contas_fat.push({pg,faturas:fs}); }
+        catch(e){ erros.push({b:(b.nome||'Banco')+' · '+c.nome,m:msgErro(e.message)}) }
+      }
       let lancs=[];
       // nunca sincronizado: busca o máximo que o Open Finance costuma guardar
       const desde=(b.desdeC&&b.desdeC[c.id])||b.desde||addM(mk(hoje()),-12)+'-01';
@@ -1965,7 +2011,8 @@ async function sincronizar(auto){
     // sozinhos, e são o que a tela mostra primeiro
     const foto=()=>JSON.stringify([cfg.contas.map(c=>c.saldo),cfg.cartoes.map(c=>[c.limite,c.fecha,c.vence,c.aberturas])]);
     const antes=foto();
-    aplicaContas(achadas);
+    aplicaFaturas(contas_fat);
+    aplicaContas(achadas,contas_fat);
     const mudou=foto()!==antes;
     if(mudou){salvarCfg();render()}
     return auto?null:toast(mudou?'Saldos e faturas atualizados':'Nada novo para trazer');
@@ -1979,7 +2026,7 @@ async function sincronizar(auto){
   const quantos={}, usados={};
   antigos.forEach(t=>{const h=semOrigemLanc(t);quantos[h]=(quantos[h]||0)+1});
   const montado={pg:(itens[0]||{}).pg||(cfg.contas[0]||{}).id,inv:false,saldo:null,ajusta:false,
-    sync:true,achadas,invs:invsAg,erros,acertar:true,itens:itens.map(t=>{
+    sync:true,achadas,invs:invsAg,erros,fats:contas_fat,acertar:true,itens:itens.map(t=>{
     // CREDIT num cartão é dinheiro entrando nele: pagamento ou estorno, nunca compra
     const k=chaveTx(t);
     const nat=natureza(t.desc)||(cartao(t.pg)&&String(t.tp||'').toUpperCase()==='CREDIT'?'fatura':'');

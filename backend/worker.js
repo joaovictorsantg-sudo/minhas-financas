@@ -88,6 +88,21 @@ export default {
         return json({ investimentos: tudo });
       }
 
+      // A fatura do cartão existe pronta na Pluggy: datas e total, sem precisar
+      // deduzir ciclo a partir de transações soltas.
+      if (rota === '/faturas') {
+        const accountId = url.searchParams.get('accountId');
+        if (!accountId) return json({ erro: 'falta_accountId' }, 400);
+        const tudo = [];
+        for (let pagina = 1; pagina <= 10; pagina++) {
+          const q = new URLSearchParams({ accountId, pageSize: '100', page: String(pagina) });
+          const r = await pluggy(env, `/bills?${q}`);
+          tudo.push(...(r.results || []).map(faturaLimpa));
+          if (!r.results?.length || pagina >= (r.totalPages ?? 1)) break;
+        }
+        return json({ faturas: tudo });
+      }
+
       if (rota === '/item') {
         const itemId = url.searchParams.get('itemId');
         if (!itemId) return json({ erro: 'falta_itemId' }, 400);
@@ -158,6 +173,17 @@ const invLimpo = (i) => ({
   aplicado: i.amount ?? null,      // bruto aplicado, com impostos
   cotas: i.quantity ?? null,
   unitario: i.value ?? null,
+});
+
+// a fatura vem pronta da Pluggy: datas e total, sem deduzir ciclo
+const soDia = (d) => (typeof d === 'string' && d.length >= 10 ? d.slice(0, 10) : null);
+const cent = (v) => (v == null || isNaN(+v) ? null : Math.round(+v * 100) / 100);
+const faturaLimpa = (b) => ({
+  id: b.id,
+  vence: soDia(b.dueDate),
+  fecha: soDia(b.billClosingDate),
+  total: cent(b.totalAmount),
+  minimo: cent(b.minimumPaymentAmount),
 });
 
 const lancLimpo = (t) => ({
