@@ -191,7 +191,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v6 — 24/11';
+const VERSAO='v7 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -346,7 +346,14 @@ function iniciar(){
       // só recarrega quando uma versão nova assume, nunca na primeira instalação
       if(jaControlado&&!recarregando){recarregando=true;location.reload()}
     });
-    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+    // updateViaCache:'none' impede o navegador de usar cópia em cache do sw.js
+    navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'})
+      .then(reg=>{
+        reg.update().catch(()=>{});
+        addEventListener('visibilitychange',()=>{
+          if(document.visibilityState==='visible')reg.update().catch(()=>{});
+        });
+      }).catch(()=>{});
   }
   const velho=!cfg.cotTs||(Date.now()-cfg.cotTs)>15*60*1000;
   if(velho)buscarCotacoes(true);

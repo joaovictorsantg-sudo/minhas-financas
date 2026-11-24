@@ -1,6 +1,6 @@
-const CACHE = 'financas-v6';
+const CACHE = 'financas-v7';
 const SHELL = [
-  './', './index.html', './manifest.webmanifest',
+  './', './index.html',
   './icons/icon-192.png', './icons/icon-512.png',
   './icons/icon-maskable-512.png', './icons/apple-touch-icon.png', './icons/favicon.png'
 ];
@@ -20,7 +20,13 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
-  if (new URL(req.url).origin !== location.origin) return; // cotações vão direto à rede
+  const url = new URL(req.url);
+  if (url.origin !== location.origin) return; // cotações vão direto à rede
+
+  // NUNCA tocar no próprio service worker nem no manifest: é por eles que o
+  // navegador descobre que existe versão nova. Servir do cache aqui prende o
+  // app na versão instalada para sempre.
+  if (url.pathname.endsWith('/sw.js') || url.pathname.endsWith('.webmanifest')) return;
 
   const ehPagina = req.mode === 'navigate' || req.destination === 'document';
 
