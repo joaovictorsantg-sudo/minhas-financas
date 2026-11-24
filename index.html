@@ -121,6 +121,8 @@ h2 a{font-size:13px;font-weight:500;color:var(--acc);cursor:pointer;text-decorat
 .btn.s{width:auto;padding:8px 13px;font-size:13.5px;border-radius:10px}
 .acts{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
 .acts .btn{flex:1;min-width:92px}
+.acts.fim{position:sticky;bottom:0;z-index:2;background:var(--base);margin-top:18px;
+  padding:12px 0 calc(4px + env(safe-area-inset-bottom));border-top:1px solid var(--line)}
 
 /* barra inferior */
 nav{position:fixed;left:0;right:0;bottom:0;z-index:12;background:var(--surf);border-top:1px solid var(--line);
@@ -137,10 +139,11 @@ nav button.on{color:var(--acc)}
 /* painel deslizante */
 .ov{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:30;display:none;align-items:flex-end;justify-content:center}
 .ov.on{display:flex}
-.sheet{background:var(--base);width:100%;max-width:600px;border-radius:24px 24px 0 0;padding:8px 18px calc(24px + env(safe-area-inset-bottom));
-  max-height:93vh;overflow:auto}
-.handle{width:38px;height:4px;border-radius:2px;background:var(--line2);margin:0 auto 12px}
-.sheet h3{margin:0 0 4px;font-size:19px;font-weight:600;letter-spacing:-.02em;display:flex;align-items:center;gap:8px}
+.sheet{background:var(--base);width:100%;max-width:600px;border-radius:24px 24px 0 0;padding:0 18px calc(28px + env(safe-area-inset-bottom));
+  max-height:92vh;overflow:auto;overscroll-behavior:contain;position:relative}
+.handle{width:38px;height:4px;border-radius:2px;background:var(--line2);margin:10px auto 2px}
+.sheet h3{margin:0 0 4px;font-size:19px;font-weight:600;letter-spacing:-.02em;display:flex;align-items:center;gap:8px;
+  position:sticky;top:0;z-index:2;background:var(--base);padding:10px 0 10px}
 .sheet h3 .sp{flex:1}
 .sheet h4{margin:22px 0 2px;font-size:13px;font-weight:600;color:var(--mute)}
 label{display:block;font-size:12.5px;color:var(--mute);margin:14px 0 5px;font-weight:500}
@@ -152,9 +155,11 @@ input.big{font-size:30px;font-weight:600;letter-spacing:-.03em;padding:12px 13px
 .seg button.on{background:var(--acc);color:var(--accInk);font-weight:600}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
-.catrow{display:grid;grid-template-columns:52px 1fr 94px 36px;gap:7px;align-items:center;margin:8px 0}
-.catrow input{padding:10px 8px}
-.rm{border:1px solid var(--line2);background:none;color:var(--down);border-radius:9px;height:40px;cursor:pointer;font-size:17px}
+.catrow{display:grid;grid-template-columns:44px minmax(0,1fr) 78px 30px;gap:6px;align-items:center;margin:7px 0}
+.catrow input{padding:9px 6px;font-size:15px;border-radius:9px;min-width:0}
+.catrow input:first-child{padding:9px 2px}
+.rm{border:0;background:none;color:var(--mute);border-radius:8px;height:36px;cursor:pointer;font-size:20px;line-height:1;padding:0}
+.rm:active{color:var(--down)}
 
 .toast{position:fixed;left:50%;bottom:calc(158px + env(safe-area-inset-bottom));transform:translateX(-50%);
   background:var(--ink);color:var(--base);padding:11px 17px;border-radius:13px;font-size:14px;font-weight:500;
@@ -287,7 +292,7 @@ function formToken(){
   abrir(cab('Token da brapi')+`<p class="hint" style="padding-left:0">ITUB4 funciona sem token. Para WEGE3, CPLE3 e qualquer outra ação, crie um token gratuito em brapi.dev e cole aqui. Ele fica só neste aparelho.</p>
   <label>Token</label><input id="tk_v" value="${esc(getTk())}" placeholder="cole aqui" autocomplete="off" spellcheck="false">
   <p class="hint" style="padding-left:0"><a href="https://brapi.dev" target="_blank" rel="noopener" style="color:var(--acc)">Abrir brapi.dev para criar o token</a></p>
-  <div class="acts"><button class="btn g" onclick="fechar()">Cancelar</button><button class="btn" onclick="salvarToken()">Salvar e buscar</button></div>`);
+  <div class="acts fim"><button class="btn g" onclick="fechar()">Cancelar</button><button class="btn" onclick="salvarToken()">Salvar e buscar</button></div>`);
 }
 function salvarToken(){setTk(val('tk_v')||'');fechar();buscarCotacoes(false)}
 
@@ -610,7 +615,7 @@ function formLanc(){
   <div class="two"><div><label>${t==='r'?'Caiu em':'Saiu de'}</label><select id="f_pg" onchange="guardaForm();formLanc()">${pgs.map(p=>`<option value="${p.id}" ${fl.pg===p.id?'selected':''}>${p.n}</option>`).join('')}</select></div>
   <div><label>Data</label><input id="f_data" type="date" value="${esc(fl.data)}"></div></div>`;
   if(t==='d'&&cartao(fl.pg))h+=`<label>Parcelas</label><select id="f_parc">${Array.from({length:18},(_,i)=>`<option value="${i+1}" ${+fl.parc===i+1?'selected':''}>${i===0?'À vista':(i+1)+'x'}</option>`).join('')}</select>`;
-  h+=`<div class="acts"><button class="btn" onclick="salvarLanc()">Salvar</button></div>`;
+  h+=`<div class="acts fim"><button class="btn" onclick="salvarLanc()">Salvar</button></div>`;
   abrir(h);
   setTimeout(()=>{const e=$('#f_v')||$('#f_q');if(e&&!e.value)e.focus()},60);
 }
@@ -651,7 +656,7 @@ function detalhe(k,id){
   if(a&&tx.q)sub+=' · '+tx.q+' cotas de '+esc(a.nome);
   abrir(cab(esc(tx.desc||(a?a.nome:c.nome)))+`<span class="vbig">${money(tx.v)}</span>
   <p class="hint" style="padding-left:0;margin-top:6px">${sub}</p>
-  <div class="acts"><button class="btn g" onclick="fechar()">Fechar</button><button class="btn d" onclick="excluir('${k}','${id}')">Excluir</button></div>`);
+  <div class="acts fim"><button class="btn g" onclick="fechar()">Fechar</button><button class="btn d" onclick="excluir('${k}','${id}')">Excluir</button></div>`);
 }
 function excluir(k,id){
   const tx=(meses[k]||[]).find(x=>x.id===id);if(!tx)return;
@@ -668,7 +673,7 @@ function pagarFatura(cid,F){
   abrir(cab('Pagar fatura de '+curtoMes(mesVenc(c,F)))+`<span class="vbig">${money(faturas(c)[F]||0)}</span>
   <p class="hint" style="padding-left:0;margin-top:6px">${esc(c.nome)}, vence ${venceData(c,F)}.</p>
   <label>De qual conta saiu</label><select id="pf_c">${cfg.contas.map(x=>`<option value="${x.id}" ${x.id===c.conta?'selected':''}>${x.emoji} ${esc(x.nome)} — ${brl(saldoConta(x.id))}</option>`).join('')}</select>
-  <div class="acts"><button class="btn g" onclick="fechar()">Cancelar</button><button class="btn" onclick="confirmaPg('${cid}','${F}')">Confirmar</button></div>`);
+  <div class="acts fim"><button class="btn g" onclick="fechar()">Cancelar</button><button class="btn" onclick="confirmaPg('${cid}','${F}')">Confirmar</button></div>`);
 }
 function confirmaPg(cid,F){const c=cartao(cid);cfg.faturasPagas[pagaKey(c,F)]=val('pf_c')||c.conta;salvarCfg();fechar();toast('Fatura paga, limite liberado')}
 
@@ -677,7 +682,7 @@ function formCotacoes(){
   const rv=cfg.ativos.filter(a=>a.rv);
   abrir(cab('Atualizar cotações')+`<p class="hint" style="padding-left:0">Abra o Inter, veja o preço de cada uma e digite aqui. Posição e resultado recalculam na hora.</p>`+
   rv.map((a,i)=>`<label>${esc(a.nome)} — ${a.qtd} ${a.qtd===1?'cota':'cotas'}, médio ${brl(a.pm)}</label><input id="ct_${i}" inputmode="decimal" value="${n2(a.cot)}">`).join('')+
-  `<div class="acts"><button class="btn g" onclick="fechar()">Cancelar</button><button class="btn" onclick="salvarCotacoes()">Salvar cotações</button></div>`);
+  `<div class="acts fim"><button class="btn g" onclick="fechar()">Cancelar</button><button class="btn" onclick="salvarCotacoes()">Salvar cotações</button></div>`);
 }
 function salvarCotacoes(){
   const rv=cfg.ativos.filter(a=>a.rv);
@@ -693,7 +698,7 @@ function formAtivo(id){
   <div class="three"><div><label>Cotas</label><input id="a_q" inputmode="decimal" value="${a.qtd}"></div><div><label>Preço médio</label><input id="a_pm" inputmode="decimal" value="${n2(a.pm)}"></div><div><label>Cotação</label><input id="a_c" inputmode="decimal" value="${n2(a.cot)}"></div></div>`:'')
   :`<label>É ação, FII ou ETF?</label><select id="a_rv"><option value="">Não, é renda fixa ou outro</option><option value="1">Sim, tem cotas e cotação</option></select>
    <div class="two"><div><label>Quanto tem hoje (ou cotas)</label><input id="a_i" inputmode="decimal" placeholder="0"></div><div><label>Preço médio, se for ação</label><input id="a_pm2" inputmode="decimal" placeholder="0,00"></div></div>`}
-  <div class="acts">${id?`<button class="btn d" onclick="delAtivo('${id}')">Excluir</button>`:''}<button class="btn" onclick="salvarAtivo('${id||''}')">Salvar</button></div>`);
+  <div class="acts fim">${id?`<button class="btn d" onclick="delAtivo('${id}')">Excluir</button>`:''}<button class="btn" onclick="salvarAtivo('${id||''}')">Salvar</button></div>`);
 }
 function salvarAtivo(id){
   const nome=(val('a_n')||'').trim();if(!nome)return toast('Dê um nome');
@@ -711,7 +716,7 @@ function delAtivo(id){cfg.ativos=cfg.ativos.filter(a=>a.id!==id);salvarCfg();fec
 function formSaldo(id){const a=ativo(id);
   abrir(cab('Atualizar saldo')+`<p class="hint" style="padding-left:0">Veja no app do banco quanto ${esc(a.nome)} vale hoje. A diferença vira rendimento.</p>
   <label>Saldo atual</label><input id="s_v" class="big" inputmode="decimal" value="${n2(a.atual||0)}">
-  <div class="acts"><button class="btn g" onclick="fechar()">Cancelar</button><button class="btn" onclick="salvarSaldo('${id}')">Salvar</button></div>`)}
+  <div class="acts fim"><button class="btn g" onclick="fechar()">Cancelar</button><button class="btn" onclick="salvarSaldo('${id}')">Salvar</button></div>`)}
 function salvarSaldo(id){const v=num(val('s_v'));if(!(v>=0))return toast('Valor inválido');ativo(id).atual=r2(v);salvarCfg();fechar()}
 
 /* ---------- cartões ---------- */
@@ -727,7 +732,7 @@ function formCartao(id){
   <label>Cor</label><select id="cc_cor">${CORES.map(k=>`<option value="${k}" ${c.cor===k?'selected':''}>${k}</option>`).join('')}</select>
   ${id?'':`<label>Fatura em aberto hoje, se já tiver</label><input id="cc_ab" inputmode="decimal" placeholder="0,00">
   <p class="hint" style="padding-left:0">O que você já gastou neste cartão antes de começar a usar o app. Pode deixar vazio.</p>`}
-  <div class="acts">${id?`<button class="btn d" onclick="delCartao('${id}')">Excluir</button>`:''}<button class="btn" onclick="salvarCartao('${id||''}')">Salvar</button></div>`);
+  <div class="acts fim">${id?`<button class="btn d" onclick="delCartao('${id}')">Excluir</button>`:''}<button class="btn" onclick="salvarCartao('${id||''}')">Salvar</button></div>`);
 }
 function salvarCartao(id){
   const nome=(val('cc_n')||'').trim(); if(!nome)return toast('Dê um nome ao cartão');
@@ -754,7 +759,7 @@ function formObj(id){
   abrir(cab(id?'Editar objetivo':'Novo objetivo')+`<div style="display:grid;grid-template-columns:72px 1fr;gap:10px"><div><label>Ícone</label><input id="o_e" value="${esc(o.emoji)}" maxlength="4" style="text-align:center"></div><div><label>Nome</label><input id="o_n" value="${esc(o.nome)}" placeholder="Celular novo"></div></div>
   <div class="two"><div><label>Quanto quer juntar</label><input id="o_a" inputmode="decimal" value="${o.alvo?n2(o.alvo):''}"></div><div><label>Até quando</label><input id="o_p" type="month" value="${esc(o.prazo)}"></div></div>
   ${id?`<label>Já guardado</label><input id="o_g" inputmode="decimal" value="${n2(o.guardado)}">`:''}
-  <div class="acts">${id?`<button class="btn d" onclick="delObj('${id}')">Excluir</button>`:''}<button class="btn" onclick="salvarObj('${id||''}')">Salvar</button></div>`);
+  <div class="acts fim">${id?`<button class="btn d" onclick="delObj('${id}')">Excluir</button>`:''}<button class="btn" onclick="salvarObj('${id||''}')">Salvar</button></div>`);
 }
 function salvarObj(id){
   const nome=(val('o_n')||'').trim(),alvo=num(val('o_a'));if(!nome||!(alvo>0))return toast('Preencha nome e valor');
@@ -766,7 +771,7 @@ function salvarObj(id){
 function delObj(id){cfg.objetivos=cfg.objetivos.filter(o=>o.id!==id);salvarCfg();fechar()}
 function formGuardar(id){const o=cfg.objetivos.find(x=>x.id===id);
   abrir(cab(esc(o.emoji+' '+o.nome))+`<label>Valor</label><input id="g_v" class="big" inputmode="decimal" placeholder="0,00">
-  <div class="acts"><button class="btn g" onclick="guardar('${id}',-1)">Retirar</button><button class="btn" onclick="guardar('${id}',1)">Guardar</button></div>`);
+  <div class="acts fim"><button class="btn g" onclick="guardar('${id}',-1)">Retirar</button><button class="btn" onclick="guardar('${id}',1)">Guardar</button></div>`);
   setTimeout(()=>$('#g_v').focus(),60)}
 function guardar(id,s){const v=num(val('g_v'));if(!(v>0))return toast('Valor inválido');const o=cfg.objetivos.find(x=>x.id===id);
   o.guardado=Math.max(0,r2(o.guardado+s*v));salvarCfg();fechar();toast(s>0?'Guardado':'Retirado')}
@@ -808,7 +813,7 @@ function formAjustes(){
   <div class="acts"><button class="btn g" onclick="exportar()">Baixar backup</button>
   <button class="btn g" onclick="document.getElementById('imp').click()">Restaurar backup</button></div>
   <input type="file" id="imp" style="display:none" onchange="importar(this)">
-  <div class="acts"><button class="btn g" onclick="fechar()">Cancelar</button><button class="btn" onclick="salvarAjustes()">Salvar</button></div>`;
+  <div class="acts fim"><button class="btn g" onclick="fechar()">Cancelar</button><button class="btn" onclick="salvarAjustes()">Salvar</button></div>`;
   abrir(h);
 }
 function editarCartao(id){lerAjustes();cfg=rasc;rasc=null;salvarCfg();formCartao(id)}
