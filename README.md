@@ -134,7 +134,13 @@ categoria com nome recebe o que de fato consome, medido desde o mês em
 que apareceu e nunca abaixo do ritmo do mês corrente; "Outros" fica com o
 resto, em vez de abocanhar o orçamento por ser o maior monte.
 
-Passar do planejado numa categoria não é furo enquanto outra deixou
+A tela de planejamento abre pelo que já aconteceu: quanto saiu no mês
+contra a mediana dos meses fechados, o que subiu e o que caiu em cada
+categoria, os maiores gastos e os avisos do que destoa. Teto por
+categoria continua existindo, abaixo disso, para quem quiser um limite —
+mas orçamento por envelope pressupõe despesa fixa, e nem todo mundo tem.
+
+Passar do teto numa categoria não é furo enquanto outra deixou
 sobra: o teto que importa é o do mês. A tela soma a sobra de todas e diz
 se o excesso está coberto, quanto ainda resta livre, ou quanto falta
 quando nem a sobra fecha a conta.

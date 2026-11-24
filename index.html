@@ -210,7 +210,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v49 — 24/11';
+const VERSAO='v50 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -243,8 +243,8 @@ const DEF={
   categorias:[
     {id:'alim',emoji:'🍔',nome:'Alimentação',orc:0},
     {id:'transp',emoji:'⛽',nome:'Transporte',orc:0},
-    {id:'casa',emoji:'🏠',nome:'Casa e contas',orc:0},
     {id:'lazer',emoji:'🎮',nome:'Lazer',orc:0},
+    {id:'casa',emoji:'🏠',nome:'Casa e contas',orc:0},
     {id:'saude',emoji:'💊',nome:'Saúde',orc:0},
     {id:'outros',emoji:'📦',nome:'Outros',orc:0}
   ],
@@ -419,6 +419,23 @@ function resumo(M){
   return{rec:r2(rec),desp:r2(desp),apo:r2(apo),sobra:r2(rec-desp-apo),porCat};
 }
 const orcTotal=()=>r2(cfg.categorias.reduce((s,c)=>s+(+c.orc||0),0));
+// O "normal" de um gasto é a mediana dos meses fechados, não a média: um mês
+// atípico puxa a média e passa a justificar o próximo mês atípico.
+const mediana=a=>{const v=(a||[]).filter(x=>x!=null).sort((x,y)=>x-y),n=v.length;
+  return n?r2(n%2?v[(n-1)/2]:(v[n/2-1]+v[n/2])/2):0};
+function analise(M){
+  const r=resumo(M), hj=hoje(), atual=mk(hj);
+  const fech=Object.keys(meses).filter(k=>k<M&&(meses[k]||[]).length).sort().slice(-6);
+  const tot=[], porCat={};
+  fech.forEach(k=>{const rr=resumo(k);tot.push(rr.desp);
+    cfg.categorias.concat(Object.keys(rr.porCat).map(id=>({id}))).forEach(c=>{
+      porCat[c.id]=porCat[c.id]||[];});
+    Object.keys(porCat).forEach(c=>porCat[c].push(rr.porCat[c]||0));});
+  const normal={}; Object.keys(porCat).forEach(c=>{normal[c]=mediana(porCat[c])});
+  const d=M===atual?+hj.slice(8,10):0, dias=diasNo(M);
+  return {r,fech:fech.length,normalTot:mediana(tot),normal,d,dias,
+    proj:d&&d<dias?r2(r.desp*dias/d):0};
+}
 // mudar o dia de fechamento faz o banco juntar dois ciclos num só, e uma
 // fatura deixa de existir. O que cairia nela entra na seguinte.
 const pulada=(c,F)=>!!(c&&c.pula&&c.pula.indexOf(F)>=0);
@@ -667,61 +684,116 @@ investir(){
   return h;
 },
 planos(){
-  const M=st.mes,r=resumo(M),o=orcTotal(),sobra=r2(cfg.salario-o-cfg.metaInvest);
-  const fGasto=pct(o,cfg.salario),fInv=pct(cfg.metaInvest,cfg.salario),fSobra=pct(Math.max(0,sobra),cfg.salario);
+  const M=st.mes, A=analise(M), r=A.r, nomeM=MES[+M.slice(5)-1].toLowerCase();
+  const temBase=A.fech>=2&&A.normalTot>0;
   let h=mnav();
-  h+=`<div class="hero"><div style="display:flex;align-items:baseline"><span class="lbl">Plano do salário</span><span style="flex:1"></span><span class="vmid">${money(cfg.salario)}</span></div>
-  <div class="split" style="height:14px;margin-top:12px">
-    <i style="width:${fGasto}%;background:var(--acc)"></i>
-    <i style="width:${fInv}%;background:var(--up)"></i>
-    <i style="width:${fSobra}%;background:var(--line2)"></i></div>
-  <div class="plin"><span class="pb" style="background:var(--acc)"></span><span>Gastos planejados</span><span class="sp2"></span><span class="n">${money(o)}</span><span class="lbl pp">${Math.round(fGasto)}%</span></div>
-  <div class="plin"><span class="pb" style="background:var(--up)"></span><span>Investir</span><span class="sp2"></span><span class="n">${money(cfg.metaInvest)}</span><span class="lbl pp">${Math.round(fInv)}%</span></div>
-  <div class="plin"><span class="pb" style="background:var(--line2)"></span><span>Folga</span><span class="sp2"></span><span class="n ${sobra<0?'down':''}">${money(sobra)}</span><span class="lbl pp">${Math.round(fSobra)}%</span></div>
-  ${sobra<0?`<p class="hint" style="padding-left:0">O plano não fecha: gastos e meta somam ${brl(o+cfg.metaInvest)}, mais do que o salário.</p>`
-   :sobra>0&&totalCartoes()>0?`<p class="hint" style="padding-left:0">A folga de ${brl(sobra)} por mês zera os ${brl(totalCartoes())} de cartão em cerca de ${Math.ceil(totalCartoes()/sobra)} meses.</p>`:''}
-  <div class="acts"><button class="btn g" onclick="abrirAjustes()">Editar o plano</button></div></div>`;
 
-  const R=ritmo(M), adiantado=R.pGasto>R.pMes+.08, folgado=R.pGasto<R.pMes-.08;
-  h+=`<h2>Como está ${MES[+M.slice(5)-1]}</h2>`;
-  // sem orçamento não dá para dizer que estourou nem que sobrou: só o gasto é fato
-  h+=o>0?`<div class="hero"><span class="lbl">Resta do orçamento</span>
-  <span class="vbig ${R.livre<0?'down':''}">${money(R.livre)}</span>
-  <div class="gauge"><div class="fill ${R.pGasto>1?'hot':adiantado?'':'ok'}" style="width:${Math.min(100,R.pGasto*100)}%"></div>
-  ${R.dia?`<div class="mark" style="left:${Math.min(99.5,R.pMes*100)}%"></div>`:''}</div>
-  <div class="lbl" style="margin-top:12px">Você gastou ${money(R.gasto)} dos ${money(R.orc)} planejados${R.dia?`, e o mês está no dia ${R.dia} de ${R.dias}`:''}.
-  ${R.dia?(R.pGasto>1?' O orçamento já estourou.':adiantado?' Está correndo na frente do calendário.':folgado?' Está sobrando mais do que o esperado para esta altura.':' Está no ritmo certo.'):''}</div></div>`
-  :`<div class="hero"><span class="lbl">Gasto em ${MES[+M.slice(5)-1].toLowerCase()}</span>
-  <span class="vbig">${money(R.gasto)}</span>
-  <div class="lbl" style="margin-top:12px">Você ainda não disse quanto quer gastar por mês${R.dia?`. O mês está no dia ${R.dia} de ${R.dias}`:''}. Com um orçamento definido, aqui aparece quanto resta e se o ritmo está certo.</div>
-  <div class="acts"><button class="btn s" onclick="formOrcAuto()">Calcular pra mim</button><button class="btn g s" onclick="abrirAjustes()">Definir na mão</button></div></div>`;
-  h+=`<div class="grp"><div class="pad">
-  <div style="display:flex;align-items:baseline"><span>Gasto</span><span style="flex:1"></span><span class="vmid">${money(r.desp)}</span>${o>0?`<span class="lbl"> de ${brl(o)}</span>`:''}</div>${barra(r.desp,o)}
-  <div style="display:flex;align-items:baseline;margin-top:16px"><span>Investido</span><span style="flex:1"></span><span class="vmid">${money(r.apo)}</span>${cfg.metaInvest>0?`<span class="lbl"> de ${brl(cfg.metaInvest)}</span>`:''}</div>${barra(r.apo,cfg.metaInvest,1)}
-  <div style="display:flex;align-items:baseline;margin-top:16px"><span>Entrou</span><span style="flex:1"></span><span class="vmid up">${money(r.rec)}</span></div></div></div>`;
+  /* ---- quanto saiu, e como isso se compara com o costume ---- */
+  const dif=r2(r.desp-A.normalTot), perto=temBase&&Math.abs(dif)<Math.max(30,A.normalTot*.08);
+  h+=`<div class="hero"><span class="lbl">Saiu em ${nomeM}</span>
+  <span class="vbig">${money(r.desp)}</span>
+  <div class="lbl" style="margin-top:12px">${
+    !temBase?'Ainda não tenho meses fechados suficientes para dizer o que é normal para você.'
+    :perto?'Em linha com os '+brl(A.normalTot)+' que costuma sair por mês.'
+    :dif>0?'<span class="down">'+brl(dif)+' acima</span> dos '+brl(A.normalTot)+' de um mês comum seu.'
+          :'<span class="up">'+brl(-dif)+' abaixo</span> dos '+brl(A.normalTot)+' de um mês comum seu.'}
+  ${A.proj?' No ritmo de hoje, o mês fecha perto de <b>'+brl(A.proj)+'</b>.':''}</div>
+  <div class="trio" style="margin-top:16px"><div><span class="lbl">Entrou</span><b class="up">${money(r.rec)}</b></div>
+  <div><span class="lbl">Investiu</span><b>${money(r.apo)}</b></div>
+  <div><span class="lbl">Sobrou</span><b class="${r.sobra<0?'down':''}">${money(r.sobra)}</b></div></div></div>`;
 
-  h+=`<h2>Orçamento por categoria<span class="sp"></span><a onclick="formOrcAuto()">calcular</a><span style="width:14px;display:inline-block"></span><a onclick="abrirAjustes()">editar</a></h2><div class="grp">`;
+  /* ---- o que mudou, categoria por categoria ---- */
+  const ids=[...new Set(Object.keys(r.porCat).concat(Object.keys(A.normal)))];
+  const linhas=ids.map(id=>{
+    const g=r2(r.porCat[id]||0), n=r2(A.normal[id]||0);
+    return {id,g,n,d:r2(g-n),info:cfg.categorias.find(c=>c.id===id)||catInfo(id)};
+  }).filter(x=>x.g>0||x.n>0).sort((a,b)=>Math.abs(b.d)-Math.abs(a.d));
+  if(linhas.length){
+    h+=`<h2>O que mudou${temBase?'':' <span class="lbl" style="font-weight:400">— sem base para comparar ainda</span>'}</h2><div class="grp"><div class="rows">`;
+    linhas.slice(0,8).forEach(x=>{
+      const sobe=x.d>0, quieto=!temBase||Math.abs(x.d)<Math.max(10,x.n*.12);
+      h+=`<button class="row" onclick="st.filtro='${x.id}';ir('lanc')"><span class="ico">${x.info.emoji||'❔'}</span>
+        <span class="mid"><span class="t1">${esc(x.info.nome||'Sem categoria')}</span>
+        <span class="t2">${!temBase?'primeiro registro':x.n<=0?'não aparecia nos meses anteriores':x.g<=0?'nada neste mês, contra '+brl(x.n)+' de sempre':quieto?'como de costume':
+          (sobe?'R$ '+n2(x.d)+' a mais':'R$ '+n2(-x.d)+' a menos')+' que os '+brl(x.n)+' de sempre'}</span></span>
+        <span class="end vmid ${quieto?'':sobe?'down':'up'}">${money(x.g)}</span></button>`});
+    h+=`</div></div>`;
+  }
+
+  /* ---- alertas: só o que destoa de verdade ---- */
+  const avisos=[];
+  linhas.forEach(x=>{
+    if(!temBase||x.n<=0||x.g<60||x.d<40)return;
+    if(x.g>x.n*1.6)avisos.push({t:(x.info.emoji||'❔')+' '+(x.info.nome||'Sem categoria'),
+      m:'está em '+brl(x.g)+', '+Math.round((x.g/x.n-1)*100)+'% acima dos '+brl(x.n)+' de sempre.'});
+  });
+  const gastos=doMes(M).filter(({tx})=>tx.t==='d').sort((a,b)=>b.p.v-a.p.v);
+  if(gastos.length&&r.desp>0){
+    const maior=gastos[0];
+    if(maior.p.v>r.desp*.3&&maior.p.v>100)avisos.push({t:'🔎 Um gasto puxou o mês',
+      m:brl(maior.p.v)+' em "'+(maior.tx.desc||catInfo(maior.tx.cat).nome)+'" representa '+Math.round(maior.p.v/r.desp*100)+'% de tudo que saiu.'});
+  }
+  if(r.rec>0&&r.apo>=0){
+    const taxa=Math.round(r.apo/r.rec*100);
+    if(taxa<20&&r.rec>500)avisos.push({t:'📉 Guardou pouco neste mês',
+      m:'De '+brl(r.rec)+' que entraram, '+brl(r.apo)+' viraram investimento — '+taxa+'%.'});
+  }
+  avisos.slice(0,3).forEach(a=>{h+=`<div class="note" style="border-left-color:var(--warn)"><b>${esc(a.t)}</b>${esc(a.m)}</div>`});
+
+  /* ---- os maiores gastos, que é onde se mexe primeiro ---- */
+  if(gastos.length){
+    h+=`<h2>Maiores gastos de ${nomeM}</h2><div class="grp"><div class="rows">`;
+    gastos.slice(0,6).forEach(({tx,p})=>{
+      const ci=cfg.categorias.find(c=>c.id===tx.cat)||catInfo(tx.cat);
+      h+=`<button class="row" onclick="st.filtro='';ir('lanc')"><span class="ico">${ci.emoji||'❔'}</span>
+        <span class="mid"><span class="t1">${esc(tx.desc||ci.nome||'Lançamento')}</span>
+        <span class="t2">${dataBR(tx.data)} · ${esc(ci.nome||'')}${p.n>1?' · parcela '+p.i+' de '+p.n:''}</span></span>
+        <span class="end vmid">${money(p.v)}</span></button>`});
+    h+=`</div></div>`;
+  }
+
+  /* ---- os seis meses, para ver a linha e não só o ponto ---- */
+  h+=`<h2>Últimos seis meses</h2><div class="grp"><div class="pad">${grafico()}</div></div>`;
+
+  /* ---- plano do salário, agora como contexto e não como abertura ---- */
+  const o=orcTotal(),sobraP=r2(cfg.salario-o-cfg.metaInvest);
+  if(cfg.salario>0){
+    const fG=pct(o,cfg.salario),fI=pct(cfg.metaInvest,cfg.salario),fS=pct(Math.max(0,sobraP),cfg.salario);
+    h+=`<h2>Plano do salário<span class="sp"></span><a onclick="abrirAjustes()">editar</a></h2>
+    <div class="panel"><div style="display:flex;align-items:baseline"><span class="lbl">Salário</span><span style="flex:1"></span><span class="vmid">${money(cfg.salario)}</span></div>
+    <div class="split" style="height:14px;margin-top:12px">
+      <i style="width:${fG}%;background:var(--acc)"></i><i style="width:${fI}%;background:var(--up)"></i><i style="width:${fS}%;background:var(--line2)"></i></div>
+    <div class="plin"><span class="pb" style="background:var(--acc)"></span><span>Gastos planejados</span><span class="sp2"></span><span class="n">${money(o)}</span><span class="lbl pp">${Math.round(fG)}%</span></div>
+    <div class="plin"><span class="pb" style="background:var(--up)"></span><span>Investir</span><span class="sp2"></span><span class="n">${money(cfg.metaInvest)}</span><span class="lbl pp">${Math.round(fI)}%</span></div>
+    <div class="plin"><span class="pb" style="background:var(--line2)"></span><span>Folga</span><span class="sp2"></span><span class="n ${sobraP<0?'down':''}">${money(sobraP)}</span><span class="lbl pp">${Math.round(fS)}%</span></div>
+    ${sobraP<0?`<p class="hint" style="padding-left:0">O plano não fecha: gastos e meta somam ${brl(o+cfg.metaInvest)}, mais do que o salário.</p>`
+     :sobraP>0&&totalCartoes()>0?`<p class="hint" style="padding-left:0">A folga de ${brl(sobraP)} por mês zera os ${brl(totalCartoes())} de cartão em cerca de ${Math.ceil(totalCartoes()/sobraP)} meses.</p>`:''}</div>`;
+  }
+
+  /* ---- orçamento, para quem quiser teto por categoria ---- */
   const cats=[...cfg.categorias];Object.keys(r.porCat).forEach(id=>{if(!cats.find(c=>c.id===id))cats.push({id,...catInfo(id),orc:0})});
-  const vis=cats.filter(c=>(+c.orc||0)>0||(r.porCat[c.id]||0)>0);
-  if(!vis.length)h+=`<div class="blank">Nenhuma categoria com orçamento.<div style="margin-top:16px"><button class="btn s" onclick="abrirAjustes()">Definir orçamento</button></div></div>`;
-  // orçamento estourado numa categoria não é furo enquanto outra deixou
-  // sobra: o teto que importa é o do mês, não o de cada envelope
-  const comOrc=vis.filter(c=>(+c.orc||0)>0).map(c=>({o:+c.orc,g:r2(r.porCat[c.id]||0)}));
-  const folga=r2(comOrc.reduce((s,x)=>s+Math.max(0,x.o-x.g),0));
-  const excesso=r2(comOrc.reduce((s,x)=>s+Math.max(0,x.g-x.o),0));
-  const coberto=excesso>0&&excesso<=folga, livre=r2(folga-excesso);
-  if(comOrc.length)h+=`<div class="note" style="border-left-color:var(--${excesso>folga?'bad':coberto?'warn':'up'})">
-    <b>${excesso>folga?'Faltam '+brl(r2(excesso-folga)):coberto?brl(excesso)+' cobertos pela sobra':'Sobra livre: '+brl(livre)}</b>
-    ${excesso>folga?'Mesmo usando o que sobrou nas outras categorias, o mês não fecha.'
-      :coberto?'Algumas categorias passaram do planejado, mas outras gastaram menos. Ainda sobram '+brl(livre)+' para o resto do mês.'
-      :'O que não for gasto numa categoria pode ir para qualquer outra.'}</div>`;
-  vis.forEach(c=>{const g=r2(r.porCat[c.id]||0),oc=+c.orc||0,resta=r2(oc-g);
-    h+=`<div class="env" onclick="st.filtro='${c.id}';ir('lanc')"><div class="top"><span class="nm">${c.emoji} ${esc(c.nome)}</span><span class="vmid">${money(g)}</span>${oc>0?`<span class="lbl">de ${brl(oc)}</span>`:''}</div>
-    ${barra(g,oc)}<div class="sub">${oc<=0?'sem orçamento definido':resta>=0?'Resta '+brl(resta):
-      coberto?'Passou '+brl(-resta)+', coberto pela sobra das outras'
-             :'<span class="down">Passou '+brl(-resta)+' do planejado</span>'}</div></div>`});
-  h+=`</div>`;
+  const vis=cats.filter(c=>(+c.orc||0)>0);
+  h+=`<h2>Tetos por categoria<span class="sp"></span><a onclick="formOrcAuto()">calcular</a><span style="width:14px;display:inline-block"></span><a onclick="abrirAjustes()">editar</a></h2>`;
+  if(!vis.length)h+=`<div class="grp"><div class="blank">Nenhum teto definido. Sem eles, esta tela ainda compara seus meses — o teto só acrescenta um limite.<div style="margin-top:16px"><button class="btn s" onclick="formOrcAuto()">Calcular para mim</button></div></div></div>`;
+  else{
+    const comOrc=vis.map(c=>({o:+c.orc,g:r2(r.porCat[c.id]||0)}));
+    const folga=r2(comOrc.reduce((s,x)=>s+Math.max(0,x.o-x.g),0));
+    const excesso=r2(comOrc.reduce((s,x)=>s+Math.max(0,x.g-x.o),0));
+    const coberto=excesso>0&&excesso<=folga, livre=r2(folga-excesso);
+    h+=`<div class="note" style="border-left-color:var(--${excesso>folga?'bad':coberto?'warn':'up'})">
+      <b>${excesso>folga?'Faltam '+brl(r2(excesso-folga)):coberto?brl(excesso)+' cobertos pela sobra':'Sobra livre: '+brl(livre)}</b>
+      ${excesso>folga?'Mesmo usando o que sobrou nas outras categorias, o mês não fecha.'
+        :coberto?'Algumas passaram do teto, mas outras gastaram menos. Ainda sobram '+brl(livre)+' para o resto do mês.'
+        :'O que não for gasto numa categoria pode ir para qualquer outra.'}</div><div class="grp">`;
+    vis.forEach(c=>{const g=r2(r.porCat[c.id]||0),oc=+c.orc||0,resta=r2(oc-g);
+      h+=`<div class="env" onclick="st.filtro='${c.id}';ir('lanc')"><div class="top"><span class="nm">${c.emoji} ${esc(c.nome)}</span><span class="vmid">${money(g)}</span><span class="lbl">de ${brl(oc)}</span></div>
+      ${barra(g,oc)}<div class="sub">${resta>=0?'Resta '+brl(resta):
+        coberto?'Passou '+brl(-resta)+', coberto pela sobra das outras'
+               :'<span class="down">Passou '+brl(-resta)+' do teto</span>'}</div></div>`});
+    h+=`</div>`;
+  }
 
+  /* ---- objetivos ---- */
   h+=`<h2>Objetivos<span class="sp"></span><a onclick="formObj()">novo objetivo</a></h2>`;
   if(!cfg.objetivos.length)h+=`<div class="grp"><div class="blank">Sem objetivos ainda.</div></div>`;
   cfg.objetivos.forEach(ob=>{const falta=r2(Math.max(0,ob.alvo-ob.guardado));let rit='';

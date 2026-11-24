@@ -1,4 +1,4 @@
-const CACHE = 'financas-v49';
+const CACHE = 'financas-v50';
 const SHELL = [
   './', './index.html',
   './icons/icon-192.png', './icons/icon-512.png',
