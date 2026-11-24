@@ -101,6 +101,16 @@ investido vai ficar e avisa quais posições suas não casaram com nenhuma
 do banco — é assim que se percebe que a mesma aplicação está prestes a
 entrar duas vezes.
 
+O orçamento pode ser calculado a partir da meta de investir: o que sobra
+do salário é repartido entre as categorias na proporção do que já se
+gasta nelas. Gastar menos que o disponível não vira licença para gastar
+mais — aí o orçamento é o próprio histórico, e a diferença fica como
+folga.
+
+Aporte em conta sincronizada não desconta o saldo de novo: o banco já
+descontou quando o dinheiro saiu, e o registro serve para o mês saber
+quanto foi investido.
+
 Orçamento não definido não é orçamento de zero. Sem ele a tela de
 planejamento mostra o gasto do mês e convida a definir um, em vez de
 acusar estouro contra uma meta que ninguém escreveu.

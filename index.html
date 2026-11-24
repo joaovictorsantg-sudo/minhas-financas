@@ -195,7 +195,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v36 — 24/11';
+const VERSAO='v37 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -442,6 +442,28 @@ function custoAtivo(a){
 const totalInvest=()=>r2(cfg.ativos.reduce((s,a)=>s+valAtivo(a),0));
 const totalCusto=()=>r2(cfg.ativos.reduce((s,a)=>s+custoAtivo(a),0));
 const patrimonio=()=>r2(totalContas()+totalInvest()-totalCartoes());
+// gasto médio por categoria nos últimos meses fechados; o mês corrente fica
+// de fora porque ainda não terminou e puxaria a média para baixo
+function mediaPorCat(n){
+  const atual=mk(hoje());
+  const ms=Object.keys(meses).filter(k=>k<atual&&(meses[k]||[]).length).sort().slice(-(n||3));
+  const cats={};
+  ms.forEach(k=>(meses[k]||[]).forEach(t=>{if(t.t==='d')cats[t.cat]=(cats[t.cat]||0)+(+t.v||0)}));
+  Object.keys(cats).forEach(k=>{cats[k]=r2(cats[k]/ms.length)});
+  return {ms:ms.length,cats};
+}
+// reparte o que sobra depois da meta de investir, na proporção do que ele
+// já gasta de verdade. Gastar menos que o disponível não vira licença para
+// gastar mais: nesse caso o orçamento é o próprio histórico.
+function sugereOrc(n){
+  const disp=r2((+cfg.salario||0)-(+cfg.metaInvest||0));
+  const {ms,cats}=mediaPorCat(n);
+  const soma=r2(Object.values(cats).reduce((a,b)=>a+b,0));
+  const fator=soma>disp&&soma>0?disp/soma:1;
+  const prop={};
+  Object.keys(cats).forEach(k=>{prop[k]=Math.max(10,Math.round(cats[k]*fator/10)*10)});
+  return {disp,ms,soma,fator,prop,total:r2(Object.values(prop).reduce((a,b)=>a+b,0))};
+}
 function ritmo(M){
   const o=orcTotal(),g=resumo(M).desp,hj=hoje(),dm=diasNo(M);
   const d=M<mk(hj)?dm:M>mk(hj)?0:+hj.slice(8,10);
@@ -613,13 +635,13 @@ planos(){
   :`<div class="hero"><span class="lbl">Gasto em ${MES[+M.slice(5)-1].toLowerCase()}</span>
   <span class="vbig">${money(R.gasto)}</span>
   <div class="lbl" style="margin-top:12px">Você ainda não disse quanto quer gastar por mês${R.dia?`. O mês está no dia ${R.dia} de ${R.dias}`:''}. Com um orçamento definido, aqui aparece quanto resta e se o ritmo está certo.</div>
-  <div class="acts"><button class="btn s" onclick="abrirAjustes()">Definir orçamento</button></div></div>`;
+  <div class="acts"><button class="btn s" onclick="formOrcAuto()">Calcular pra mim</button><button class="btn g s" onclick="abrirAjustes()">Definir na mão</button></div></div>`;
   h+=`<div class="grp"><div class="pad">
   <div style="display:flex;align-items:baseline"><span>Gasto</span><span style="flex:1"></span><span class="vmid">${money(r.desp)}</span>${o>0?`<span class="lbl"> de ${brl(o)}</span>`:''}</div>${barra(r.desp,o)}
   <div style="display:flex;align-items:baseline;margin-top:16px"><span>Investido</span><span style="flex:1"></span><span class="vmid">${money(r.apo)}</span>${cfg.metaInvest>0?`<span class="lbl"> de ${brl(cfg.metaInvest)}</span>`:''}</div>${barra(r.apo,cfg.metaInvest,1)}
   <div style="display:flex;align-items:baseline;margin-top:16px"><span>Entrou</span><span style="flex:1"></span><span class="vmid up">${money(r.rec)}</span></div></div></div>`;
 
-  h+=`<h2>Orçamento por categoria<span class="sp"></span><a onclick="abrirAjustes()">editar</a></h2><div class="grp">`;
+  h+=`<h2>Orçamento por categoria<span class="sp"></span><a onclick="formOrcAuto()">calcular</a><span style="width:14px;display:inline-block"></span><a onclick="abrirAjustes()">editar</a></h2><div class="grp">`;
   const cats=[...cfg.categorias];Object.keys(r.porCat).forEach(id=>{if(!cats.find(c=>c.id===id))cats.push({id,...catInfo(id),orc:0})});
   const vis=cats.filter(c=>(+c.orc||0)>0||(r.porCat[c.id]||0)>0);
   if(!vis.length)h+=`<div class="blank">Nenhuma categoria com orçamento.<div style="margin-top:16px"><button class="btn s" onclick="abrirAjustes()">Definir orçamento</button></div></div>`;
@@ -690,9 +712,11 @@ const val=id=>($('#'+id)||{}).value;
 let fl={};
 const contaPadrao=()=>(cfg.contas[0]||{}).id||'conta';
 function novo(t,a){
-  fl={t,ativo:a||(cfg.ativos[0]||{}).id,v:'',desc:'',data:hoje(),
+  // com banco conectado o saldo já vem de lá, e a saída do aporte já está nele
+  fl={t,ativo:a||(cfg.ativos[0]||{}).id,v:'',desc:'',data:hoje(),jaSaiu:!!cfg.bancos.length,
       pg:t==='d'?((cfg.cartoes[0]||{}).id||contaPadrao()):contaPadrao(),cat:'',q:'',pu:''};formLanc()}
 function guardaForm(){['v','desc','data','pg','cat','parc','ativo','q','pu'].forEach(k=>{const e=$('#f_'+k);if(e)fl[k]=e.value})}
+function alternaJaSaiu(){guardaForm();fl.jaSaiu=!fl.jaSaiu;formLanc()}
 function setTipo(t){guardaForm();fl.t=t;if(t!=='d'&&cartao(fl.pg))fl.pg=contaPadrao();fl.cat='';formLanc()}
 function formLanc(){
   const t=fl.t,cats=t==='r'?RECS:cfg.categorias;
@@ -714,6 +738,10 @@ function formLanc(){
   h+=`<label>Descrição, se quiser</label><input id="f_desc" placeholder="${t==='d'?'posto, iFood, cinema':t==='r'?'salário de novembro':'aporte mensal'}" value="${esc(fl.desc)}">
   <div class="two"><div><label>${t==='r'?'Caiu em':'Saiu de'}</label><select id="f_pg" onchange="guardaForm();formLanc()">${pgs.map(p=>`<option value="${p.id}" ${fl.pg===p.id?'selected':''}>${p.n}</option>`).join('')}</select></div>
   <div><label>Data</label><input id="f_data" type="date" value="${esc(fl.data)}"></div></div>`;
+  if(t==='a'&&conta(fl.pg)&&cfg.bancos.length)h+=`<div class="ilin" style="border-bottom:0;margin-top:4px" onclick="alternaJaSaiu()">
+    <button class="ick" style="${fl.jaSaiu?'':'background:none;border-color:var(--line2)'}">${fl.jaSaiu?'✓':''}</button>
+    <div class="imid"><div class="t1">Esse dinheiro já saiu da conta</div>
+    <div class="t2">O banco já descontou da conta quando você aplicou. Deixe marcado para o aporte entrar no investido sem derrubar o saldo de novo.</div></div></div>`;
   if(t==='d'&&cartao(fl.pg))h+=`<label>Parcelas</label><select id="f_parc">${Array.from({length:18},(_,i)=>`<option value="${i+1}" ${+fl.parc===i+1?'selected':''}>${i===0?'À vista':(i+1)+'x'}</option>`).join('')}</select>`;
   h+=`<div class="acts fim"><button class="btn" onclick="salvarLanc()">Salvar</button></div>`;
   abrir(h);
@@ -734,6 +762,9 @@ function salvarLanc(){
   if(fl.t==='a'){if(!a)return toast('Escolha o investimento');tx.ativo=a.id}else tx.cat=fl.cat||(fl.t==='r'?'extra':'outros');
   if(fl.t==='d'&&cartao(fl.pg))tx.parc=+fl.parc||1;
   const k=mk(tx.data);meses[k]=(meses[k]||[]).concat(tx);
+  // o saldo do banco já reflete a saída: compensa no ponto de partida para
+  // o mesmo dinheiro não sair duas vezes da conta
+  if(fl.t==='a'&&fl.jaSaiu){const c=conta(fl.pg);if(c){c.saldo=r2((+c.saldo||0)+v);tx.js=1}}
   if(a){
     if(erv){const q=num(fl.q),nq=r4((+a.qtd||0)+q);a.pm=r4((custoAtivo(a)+v)/nq);a.qtd=nq;if(!a.cot)a.cot=num(fl.pu);tx.q=q}
     else a.atual=r2((+a.atual||0)+v);
@@ -1285,6 +1316,34 @@ function aplicaContas(){
     }
   });
   return n;
+}
+function formOrcAuto(){
+  const S=sugereOrc(3);
+  if(!S.ms)return toast('Ainda não tenho mês fechado para olhar');
+  if(!cfg.salario)return toast('Preencha o salário primeiro, em Ajustes');
+  const nomes=k=>{const c=cfg.categorias.find(x=>x.id===k)||catInfo(k);return (c.emoji||'❔')+' '+c.nome};
+  abrir(cab('Orçamento sugerido')+
+  `<p class="hint" style="padding-left:0">Do salário de ${brl(cfg.salario)} saem ${brl(cfg.metaInvest)} para investir, então sobram <b>${brl(S.disp)}</b> para gastar. Nos últimos ${S.ms} ${S.ms===1?'mês fechado':'meses fechados'} você gastou ${brl(S.soma)} por mês.</p>
+  ${S.fator<1?`<div class="note" style="border-left-color:var(--warn)"><b>Não cabe</b>Seu gasto médio é maior que o disponível, então reduzi tudo na mesma proporção. Vai exigir cortar de verdade.</div>`
+   :`<div class="note" style="border-left-color:var(--up)"><b>Cabe</b>Seu gasto médio já cabe no disponível, então o orçamento é o seu próprio histórico — não o teto. A diferença vira folga.</div>`}
+  <div class="grp"><div class="rows">`+
+  Object.keys(S.prop).sort((a,b)=>S.prop[b]-S.prop[a]).map(k=>
+    `<div class="row" style="cursor:default"><span class="mid"><span class="t1">${esc(nomes(k))}</span>
+     <span class="t2">gasta ${brl((S.fator<1?S.prop[k]/S.fator:S.prop[k]))} por mês</span></span><span class="end vmid">${brl(S.prop[k])}</span></div>`).join('')+
+  `</div></div>
+  <p class="hint" style="padding-left:0">Total: <b>${brl(S.total)}</b> de ${brl(S.disp)} disponíveis. Dá para ajustar categoria por categoria depois, em Ajustes.</p>
+  <div class="acts"><button class="btn g" onclick="fechar()">Cancelar</button>
+  <button class="btn p" onclick="aplicaOrcAuto()">Usar esse orçamento</button></div>`);
+}
+function aplicaOrcAuto(){
+  const S=sugereOrc(3); let n=0;
+  Object.keys(S.prop).forEach(k=>{
+    let c=cfg.categorias.find(x=>x.id===k);
+    if(!c){c={id:k,...catInfo(k),orc:0};cfg.categorias.push(c)}
+    c.orc=S.prop[k];n++;
+  });
+  salvarCfg();fechar();render();
+  toast('Orçamento definido em '+n+(n===1?' categoria':' categorias'));
 }
 function formOrfaos(){
   const o=orfaos(); if(!o.length)return;
