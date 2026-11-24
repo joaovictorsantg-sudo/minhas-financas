@@ -191,7 +191,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v10 — 24/11';
+const VERSAO='v11 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -820,33 +820,80 @@ function dataBRtoISO(x){
 function parseCSV(txt){
   const linhas=txt.split(/\r?\n/).filter(l=>l.trim());
   if(!linhas.length)return [];
-  const sep=[';','\t',','].map(c=>({c,n:(linhas[0].split(c).length+(linhas[1]||'').split(c).length)}))
+  const sep=[';','\t',','].map(c=>({c,n:linhas.slice(0,8).reduce((a,l)=>a+l.split(c).length-1,0)}))
     .sort((a,b)=>b.n-a.n)[0].c;
   const corta=l=>{const r=[];let cur='',asp=false;
     for(const ch of l){if(ch==='"'){asp=!asp}else if(ch===sep&&!asp){r.push(cur);cur=''}else cur+=ch}
     r.push(cur);return r.map(x=>x.trim())};
-  // acha o cabeçalho
-  let iCab=-1,cols=null;
-  for(let i=0;i<Math.min(linhas.length,15);i++){
-    const c=corta(linhas[i]).map(x=>x.toLowerCase());
-    const d=c.findIndex(x=>/^data|date|lan[çc]amento/.test(x));
-    const v=c.findIndex(x=>/valor|amount|cr[ée]dito|d[ée]bito/.test(x));
-    if(d>=0&&v>=0){iCab=i;cols={d,v,
-      t:c.findIndex(x=>/descri|hist[oó]ric|t[ií]tulo|title|estabelec|memo|detalhe/.test(x))};break}
+  const linhasCort=linhas.map(corta);
+  // acha o cabeçalho, que pode vir depois de linhas de metadados
+  let iCab=-1;
+  for(let i=0;i<Math.min(linhasCort.length,20);i++){
+    const c=linhasCort[i].map(x=>x.toLowerCase());
+    if(c.some(x=>/^data|^date|lan[çc]amento/.test(x))&&c.some(x=>/valor|amount|cr[ée]d|d[ée]b|entrada|sa[ií]da/.test(x))){iCab=i;break}
   }
-  const out=[];
-  const inicio=iCab>=0?iCab+1:0;
-  for(let i=inicio;i<linhas.length;i++){
-    const c=corta(linhas[i]); if(c.length<2)continue;
-    let data,v,desc;
-    if(cols){data=dataBRtoISO(c[cols.d]);v=numBR(c[cols.v]);desc=cols.t>=0?c[cols.t]:c.find((x,j)=>j!==cols.d&&j!==cols.v&&x)||''}
-    else{ // sem cabeçalho: primeira coluna data, última numérica o valor
-      data=dataBRtoISO(c[0]);
-      let j=-1;for(let k=c.length-1;k>0;k--){if(isFinite(numBR(c[k]))){j=k;break}}
-      if(j<0)continue; v=numBR(c[j]); desc=c.slice(1,j).join(' ');
+  const cab=iCab>=0?linhasCort[iCab].map(x=>x.toLowerCase()):null;
+  const corpo=linhasCort.slice(iCab>=0?iCab+1:0).filter(r=>r.length>=2&&r.some(x=>x));
+  if(!corpo.length)return [];
+  const nc=Math.max(...corpo.map(r=>r.length));
+  const col=j=>corpo.map(r=>r[j]||'');
+  const ehHora=v=>/^\d{1,2}:\d{2}(:\d{2})?$/.test(String(v).trim());
+  const ehData=v=>!!dataBRtoISO(v);
+  const soNumero=v=>/^[-+R$\s\d.,()]*$/.test(String(v));
+
+  // coluna de data: a que mais linhas conseguem virar data
+  let iData=-1,mD=0;
+  for(let j=0;j<nc;j++){const n=col(j).filter(ehData).length;if(n>mD){mD=n;iData=j}}
+  if(mD===0)return [];
+
+  // coluna de valor: numérica, com centavos; cabeçalho decide em caso de empate,
+  // senão a mais à esquerda, porque "saldo" costuma vir depois de "valor"
+  let iVal=-1,mV=-1;
+  for(let j=0;j<nc;j++){
+    if(j===iData)continue;
+    const v=col(j);
+    const nums=v.filter(x=>x&&isFinite(numBR(x))&&/\d/.test(x)&&!ehHora(x)&&!ehData(x)).length;
+    if(!nums)continue;
+    const cent=v.filter(x=>/[.,]\d{2}\s*$/.test(x)).length;
+    const nome=cab?(cab[j]||''):'';
+    let peso=nums+cent;
+    if(/valor|amount|montante/.test(nome))peso+=1000;
+    if(/saldo|balance|limite|acumul/.test(nome))peso-=2000;
+    peso-=j; // desempata pela mais à esquerda
+    if(peso>mV){mV=peso;iVal=j}
+  }
+  if(iVal<0)return [];
+
+  // coluna de descrição: a com mais letras de verdade, nunca hora nem data
+  let iTxt=-1,mT=0;
+  for(let j=0;j<nc;j++){
+    if(j===iData||j===iVal)continue;
+    let pt=0;
+    for(const x of col(j)){
+      const t=String(x).trim();
+      if(!t||ehHora(t)||ehData(t)||soNumero(t))continue;
+      pt+=(t.match(/[A-Za-zÀ-ÿ]/g)||[]).length;
     }
-    if(!data||!isFinite(v)||v===0)continue;
-    out.push({data,v,desc:limpaDesc(desc),fit:''});
+    const nome=cab?(cab[j]||''):'';
+    if(/descri|hist[oó]ric|t[ií]tulo|title|estabelec|memo|detalhe|lan[çc]amento/.test(nome))pt+=5000;
+    if(pt>mT){mT=pt;iTxt=j}
+  }
+
+  // coluna que diz o sentido, quando o valor vem sem sinal
+  let iTipo=-1;
+  for(let j=0;j<nc;j++){
+    if(j===iData||j===iVal||j===iTxt)continue;
+    const n=col(j).filter(x=>/^(d[ée]bito|cr[ée]dito|entrada|sa[ií]da|debit|credit|[-+])$/i.test(String(x).trim())).length;
+    if(n>corpo.length*0.5){iTipo=j;break}
+  }
+
+  const out=[];
+  for(const r of corpo){
+    const data=dataBRtoISO(r[iData]); if(!data)continue;
+    let v=numBR(r[iVal]); if(!isFinite(v)||v===0)continue;
+    if(iTipo>=0&&/^(d[ée]bito|sa[ií]da|debit|-)$/i.test(String(r[iTipo]).trim()))v=-Math.abs(v);
+    else if(iTipo>=0)v=Math.abs(v);
+    out.push({data,v,desc:limpaDesc(iTxt>=0?r[iTxt]:''),fit:''});
   }
   return out;
 }
@@ -863,7 +910,7 @@ function lerExtrato(inp){
     itens.sort((a,b)=>a.data.localeCompare(b.data));
     const jaTem=new Set(todos().map(t=>t.k).filter(Boolean));
     const destino=(cfg.cartoes[0]||cfg.contas[0]||{}).id;
-    imp={pg:destino, itens:itens.map(t=>{
+    imp={pg:destino, inv:false, itens:itens.map(t=>{
       const k=chaveTx(t), dup=jaTem.has(k);
       return {...t,k,dup,usar:!dup,cat:categorizar(t.desc,t.v>0)};
     })};
@@ -871,15 +918,20 @@ function lerExtrato(inp){
   };
   fr.readAsText(f,'ISO-8859-1');
 }
+const vImp=t=>imp.inv?-t.v:t.v;
 function trocaDestino(){const e=$('#ip_pg');if(e)imp.pg=e.value;formImportar()}
+function inverter(){imp.inv=!imp.inv;
+  imp.itens.forEach(t=>{t.cat=categorizar(t.desc,vImp(t)>0)});
+  formImportar();toast(imp.inv?'Sinais invertidos':'Sinais como vieram')}
 function alterna(i){imp.itens[i].usar=!imp.itens[i].usar;formImportar()}
 function mudaCat(i,v){imp.itens[i].cat=v}
 function formImportar(){
   const ehCartao=!!cartao(imp.pg);
-  const marcados=imp.itens.filter(t=>t.usar&&!(ehCartao&&t.v>0));
+  const marcados=imp.itens.filter(t=>t.usar&&!(ehCartao&&vImp(t)>0));
   const usados=marcados.length, dups=imp.itens.filter(t=>t.dup).length;
-  const ent=marcados.filter(t=>t.v>0), gas=marcados.filter(t=>t.v<0);
-  const somaE=r2(ent.reduce((a,t)=>a+t.v,0)), somaG=r2(gas.reduce((a,t)=>a-t.v,0));
+  const ent=marcados.filter(t=>vImp(t)>0), gas=marcados.filter(t=>vImp(t)<0);
+  const somaE=r2(ent.reduce((a,t)=>a+vImp(t),0)), somaG=r2(gas.reduce((a,t)=>a-vImp(t),0));
+  const todosPos=imp.itens.length>1&&imp.itens.every(t=>vImp(t)>0);
   const opts=[...cfg.cartoes.map(c=>({id:c.id,n:'💳 '+c.nome})),...cfg.contas.map(c=>({id:c.id,n:c.emoji+' '+c.nome}))];
   let h=cab('Importar extrato')+
   `<label>Esses lançamentos são de</label><select id="ip_pg" onchange="trocaDestino()">${opts.map(o=>`<option value="${o.id}" ${imp.pg===o.id?'selected':''}>${o.n}</option>`).join('')}</select>
@@ -887,14 +939,17 @@ function formImportar(){
   <div class="trio" style="grid-template-columns:1fr 1fr;margin-top:4px">
     <div><span class="lbl">Entrando</span><b class="up">${ent.length} ${ent.length===1?'entrada':'entradas'}, ${brl(somaE)}</b></div>
     <div><span class="lbl">Saindo</span><b>${gas.length} ${gas.length===1?'gasto':'gastos'}, ${brl(somaG)}</b></div>
-  </div>${ehCartao&&imp.itens.some(t=>t.v>0)?`<p class="hint" style="padding-left:0">Em cartão, valor positivo é pagamento de fatura e não entra como entrada.</p>`:''}`;
+  </div>
+  ${todosPos?`<div class="note" style="border-left-color:var(--warn)"><b>Tudo veio positivo</b>Esse banco exporta gasto sem o sinal de menos${ehCartao?', e em cartão positivo vira pagamento de fatura — por isso nada entra':''}. Toque em inverter sinais.</div>`:''}
+  <div class="acts"><button class="btn ${todosPos?'':'g'} s" onclick="inverter()">${imp.inv?'Voltar os sinais':'Inverter sinais'}</button></div>
+  ${!todosPos&&ehCartao&&imp.itens.some(t=>vImp(t)>0)?`<p class="hint" style="padding-left:0">Em cartão, valor positivo é pagamento de fatura e não entra como entrada.</p>`:''}`;
   imp.itens.forEach((t,i)=>{
-    const ent=t.v>0, pag=ehCartao&&ent;
+    const vv=vImp(t), ent=vv>0, pag=ehCartao&&ent;
     h+=`<div class="ilin ${t.usar?'':'off'}">
       <button class="ick" onclick="alterna(${i})" aria-label="${t.usar?'Tirar':'Incluir'}">${t.usar?'✓':''}</button>
       <div class="imid"><div class="t1">${esc(t.desc)}</div>
         <div class="t2">${dataBR(t.data)}${t.dup?' · já lançado':''}${pag?' · pagamento de fatura':''}</div></div>
-      <div class="iend"><div class="vmid ${ent?'up':''}">${ent?'+':'−'}${brl(Math.abs(t.v))}</div>
+      <div class="iend"><div class="vmid ${ent?'up':''}">${ent?'+':'−'}${brl(Math.abs(vv))}</div>
         ${!ent||!ehCartao?`<select class="icat" onchange="mudaCat(${i},this.value)">${(ent?RECS:cfg.categorias).map(c=>`<option value="${c.id}" ${t.cat===c.id?'selected':''}>${c.emoji} ${esc(c.nome)}</option>`).join('')}</select>`:''}</div></div>`;
   });
   h+=`<div class="acts fim"><button class="btn g" onclick="fechar()">Cancelar</button>
@@ -905,9 +960,9 @@ function confirmarImport(){
   const ehCartao=!!cartao(imp.pg);
   const porMes={}; let n=0;
   imp.itens.filter(t=>t.usar).forEach(t=>{
-    const ent=t.v>0;
+    const vv=vImp(t), ent=vv>0;
     if(ehCartao&&ent)return; // pagamento de fatura não é lançamento
-    const tx={id:uid(),t:ent?'r':'d',v:r2(Math.abs(t.v)),desc:t.desc,
+    const tx={id:uid(),t:ent?'r':'d',v:r2(Math.abs(vv)),desc:t.desc,
       cat:t.cat||categorizar(t.desc,ent),pg:imp.pg,data:t.data,k:t.k};
     const k=mk(t.data); (porMes[k]=porMes[k]||[]).push(tx); n++;
   });
