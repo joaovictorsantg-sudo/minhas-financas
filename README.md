@@ -93,6 +93,14 @@ pela mesma tela de revisão do extrato, com a mesma detecção de
 transferência e de repetidos, então sincronizar duas vezes não duplica
 nada.
 
+Investimentos também vêm pelo mesmo caminho: posição, quantidade de
+cotas e valor aplicado saem da corretora, o que dispensa digitar
+quantidade e torna a cotação manual desnecessária para o que estiver
+sincronizado. Antes de confirmar, a tela mostra em quanto o patrimônio
+investido vai ficar e avisa quais posições suas não casaram com nenhuma
+do banco — é assim que se percebe que a mesma aplicação está prestes a
+entrar duas vezes.
+
 A sincronização acontece sozinha ao abrir o app, no máximo de quatro em
 quatro horas, e nunca interrompe: se vier coisa nova, a tela inicial
 avisa e você revisa quando quiser. Navegador não roda app em segundo

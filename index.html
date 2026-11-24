@@ -195,7 +195,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v26 — 24/11';
+const VERSAO='v28 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1103,6 +1103,72 @@ function mapeia(pid,pg){
   if(b){b.mapa=b.mapa||{};if(pg)b.mapa[pid]=pg;else delete b.mapa[pid];salvarCfg()}
   formImportar();
 }
+// acha o ativo correspondente pelo código da bolsa ou pelo nome
+function casaAtivo(i){
+  const cod=semAcento(i.codigo||'').replace(/[^a-z0-9]/gi,'');
+  const nome=semAcento(i.nome||'');
+  const porCod=cod.length>=4&&cfg.ativos.find(a=>semAcento(a.tk||a.nome).replace(/[^a-z0-9]/gi,'')===cod);
+  if(porCod)return porCod.id;
+  const porNome=cfg.ativos.find(a=>{const n=semAcento(a.nome);return n.length>=4&&(nome.includes(n)||n.includes(nome))});
+  return porNome?porNome.id:'';
+}
+const ehAcao=i=>/EQUITY|ETF/i.test(i.tipo||'')&&(+i.cotas>0);
+function mapeiaInv(pid,aid){
+  const i=(imp.invs||[]).find(x=>x.id===pid); if(!i)return;
+  i.ativo=aid; formImportar();
+}
+function aplicaInvestimentos(){
+  let n=0;
+  (imp.invs||[]).forEach(i=>{
+    if(i.ativo==='-')return;                       // o usuário pediu para ignorar
+    let a=i.ativo?ativo(i.ativo):null;
+    if(!a){                                        // novo: nasce do que o banco informou
+      a={id:uid(),nome:i.codigo&&ehAcao(i)?i.codigo:(i.nome||'Investimento'),
+         tipo:ehAcao(i)?'Ações':/FIXED_INCOME/i.test(i.tipo)?'CDB / LCI / LCA':'Outro'};
+      if(ehAcao(i))Object.assign(a,{rv:1,tk:(i.codigo||a.nome).toUpperCase(),qtd:0,pm:0,cot:0});
+      else Object.assign(a,{inicial:0,atual:0});
+      cfg.ativos.push(a); i.ativo=a.id;
+    }
+    if(a.rv&&ehAcao(i)){
+      a.qtd=r4(+i.cotas);
+      // saldo dividido por cotas bate exatamente com o total do banco;
+      // o unitário vem arredondado e deixa centavos de diferença
+      a.cot=r4(+i.cotas>0?(+i.saldo/+i.cotas):(+i.unitario||0));
+      if(i.aplicado!=null&&+i.cotas>0)a.pm=r4(+i.aplicado/+i.cotas);
+      a.tk=(i.codigo||a.tk||a.nome).toUpperCase();
+    }else{
+      a.atual=r2(+i.saldo);
+      if(i.aplicado!=null)a.inicial=r2(+i.aplicado);
+      delete a.rv;
+    }
+    n++;
+  });
+  if(n){const d=new Date();cfg.cotTs=d.getTime();
+    cfg.cotAt=p2(d.getDate())+'/'+p2(d.getMonth()+1)+' às '+p2(d.getHours())+':'+p2(d.getMinutes())}
+  return n;
+}
+function blocoInvs(){
+  const is=imp.invs||[]; if(!is.length)return '';
+  let h=`<h4 style="margin-top:18px">Investimentos no banco</h4>`;
+  is.forEach(i=>{
+    h+=`<div class="ilin" style="align-items:center">
+      <div class="imid"><div class="t1">${esc(i.codigo&&ehAcao(i)?i.codigo:i.nome)}</div>
+      <div class="t2">${brl(i.saldo)}${+i.cotas>0?' · '+i.cotas+' cotas':''}${i.aplicado!=null?' · aplicado '+brl(i.aplicado):''}</div></div>
+      <select onchange="mapeiaInv('${i.id}',this.value)" style="width:auto;max-width:46%;font-size:13px;padding:7px 8px">
+        <option value="" ${!i.ativo?'selected':''}>criar novo</option>
+        ${cfg.ativos.map(a=>`<option value="${a.id}" ${i.ativo===a.id?'selected':''}>${esc(a.nome)}</option>`).join('')}
+        <option value="-" ${i.ativo==='-'?'selected':''}>ignorar</option>
+      </select></div>`;
+  });
+  // prévia do total, para flagrar posição duplicada antes de confirmar
+  const tocados=new Set(is.filter(i=>i.ativo&&i.ativo!=='-').map(i=>i.ativo));
+  const intocados=cfg.ativos.filter(a=>!tocados.has(a.id));
+  const depois=r2(is.filter(i=>i.ativo!=='-').reduce((x,i)=>x+(+i.saldo||0),0)
+    +intocados.reduce((x,a)=>x+valAtivo(a),0));
+  h+=`<p class="hint" style="padding-left:0">Depois de aplicar, o patrimônio investido fica em <b>${brl(depois)}</b>. Hoje é ${brl(totalInvest())}.</p>`;
+  if(intocados.length)h+=`<div class="note" style="border-left-color:var(--warn)"><b>Continua como está</b>${esc(intocados.map(a=>a.nome).join(', '))}. Se for o mesmo dinheiro de algum acima, aponte para ele em vez de criar novo, senão a posição conta duas vezes.</div>`;
+  return h;
+}
 function blocoContas(){
   const as=imp.achadas||[]; if(!as.length)return '';
   const faltam=as.filter(a=>!a.pg).length;
@@ -1165,7 +1231,7 @@ function formImportar(){
   (porLinha?`<p class="hint" style="padding-left:0">Cada lançamento já vem com a conta de origem.</p>`
    :`<label>Esses lançamentos são de</label><select id="ip_pg" onchange="trocaDestino()">${opts.map(o=>`<option value="${o.id}" ${imp.pg===o.id?'selected':''}>${o.n}</option>`).join('')}</select>`)+
   `<p class="hint" style="padding-left:0">${imp.itens.length} encontrados${dups?', '+dups+' já estavam lançados':''}${nats?', '+nats+' desmarcados por serem transferência entre suas contas':''}. Marque ou desmarque como quiser.</p>
-  ${imp.sync?blocoContas():''}
+  ${imp.sync?blocoContas()+blocoInvs():''}
   ${imp.pdf?`<div class="note" style="border-left-color:var(--warn)"><b>Fatura em PDF</b>${imp.venc?'Vence em '+dataBR(imp.venc)+'/'+imp.venc.slice(0,4)+'. ':''}${imp.total?'A fatura soma '+brl(imp.total)+'. ':''}Tudo vai para a fatura de ${imp.fat?curtoMes(mesVenc(cartao(imp.pg),imp.fat)):'destino'}, mesmo o que foi comprado antes. Se você já pagou essa fatura, marque como paga depois em Cartões.</div>`:''}
   <div class="trio" style="grid-template-columns:1fr 1fr;margin-top:4px">
     <div><span class="lbl">Entrando</span><b class="up">${ent.length} ${ent.length===1?'entrada':'entradas'}, ${brl(somaE)}</b></div>
@@ -1208,16 +1274,22 @@ function confirmarImport(){
     if(imp.fat&&ehC)tx.fat=imp.fat;
     const k=mk(t.data); (porMes[k]=porMes[k]||[]).push(tx); n++;
   });
-  if(!n&&!quitadas){fechar();return toast('Nada marcado para importar')}
+  // sincronização pode não ter lançamento novo e ainda assim ter saldo e posição a acertar
+  const temAcerto=imp.sync&&imp.acertar&&
+    (((imp.achadas||[]).some(a=>a.pg))||((imp.invs||[]).some(i=>i.ativo!=='-')));
+  if(!n&&!quitadas&&!temAcerto){fechar();return toast('Nada marcado para importar')}
   Object.keys(porMes).forEach(k=>{meses[k]=(meses[k]||[]).concat(porMes[k])});
-  let msg=n+(n===1?' lançamento importado':' lançamentos importados');
+  let msg=n?(n+(n===1?' lançamento importado':' lançamentos importados')):'Nada novo para lançar';
   if(quitadas)msg+=', '+quitadas+(quitadas===1?' fatura quitada':' faturas quitadas');
   if(imp.saldo!=null&&imp.ajusta&&!ehCartao){
     const c=conta(imp.pg);
     if(c){c.saldo=r2((+c.saldo||0)+(imp.saldo-saldoConta(imp.pg)));msg+=', saldo acertado'}
   }
   if(imp.sync){
-    if(imp.acertar){const n=aplicaContas();if(n)msg+=', '+n+(n===1?' conta acertada':' contas acertadas')}
+    if(imp.acertar){
+      const n=aplicaContas();if(n)msg+=', '+n+(n===1?' conta acertada':' contas acertadas');
+      const v=aplicaInvestimentos();if(v)msg+=', '+v+(v===1?' investimento':' investimentos');
+    }
     cfg.bancos.forEach(b=>{b.desde=hoje()});
   }
   cache();imp=null;fechar();render();
@@ -1443,9 +1515,15 @@ async function sincronizar(auto){
   if(sincronizando)return;
   sincronizando=true;
   if(!auto)toast('Sincronizando…');
-  const itens=[], achadas=[];
+  const itens=[], achadas=[], invs=[];
   let erro='';
   for(const b of cfg.bancos){
+    try{
+      ((await wk('/investimentos',{itemId:b.id})).investimentos||[]).forEach(i=>{
+        if(i.saldo==null)return;
+        invs.push({...i,ativo:casaAtivo(i)});
+      });
+    }catch(e){ /* nem todo banco devolve investimento */ }
     let contas;
     try{ contas=(await wk('/contas',{itemId:b.id})).contas||[] }
     catch(e){ erro=e.message; continue }
@@ -1468,17 +1546,17 @@ async function sincronizar(auto){
   cfg.syncTs=Date.now();cache();
   sincronizando=false;
   const semDestino=achadas.filter(a=>!a.pg).length;
-  if(!itens.length&&!semDestino){
+  if(!itens.length&&!semDestino&&!invs.length){
     if(erro)return auto?null:toast('Falha ao sincronizar: '+curto(erro));
     return auto?null:toast('Nada novo para trazer');
   }
   itens.sort((a,b)=>a.data.localeCompare(b.data));
   const montado={pg:(itens[0]||{}).pg||(cfg.contas[0]||{}).id,inv:false,saldo:null,ajusta:false,
-    sync:true,achadas,acertar:true,itens:itens.map(t=>{
+    sync:true,achadas,invs,acertar:true,itens:itens.map(t=>{
     const k=chaveTx(t), dup=todos().some(x=>x.k===k), nat=natureza(t.desc);
     return {...t,k,dup,nat,quita:null,met:'',usar:!dup&&!nat,cat:categorizar(t.desc,t.v>0)};
   })};
-  const novos=montado.itens.filter(t=>t.usar).length+semDestino;
+  const novos=montado.itens.filter(t=>t.usar).length+semDestino+invs.length;
   if(auto){
     if(!novos){pend=null;render();return}      // só repetidos: nada a fazer
     if(cfg.syncDireto){imp=montado;confirmarImport();return}

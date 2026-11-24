@@ -75,6 +75,19 @@ export default {
         return json({ lancamentos: tudo });
       }
 
+      if (rota === '/investimentos') {
+        const itemId = url.searchParams.get('itemId');
+        if (!itemId) return json({ erro: 'falta_itemId' }, 400);
+        const tudo = [];
+        for (let pagina = 1; pagina <= 10; pagina++) {
+          const q = new URLSearchParams({ itemId, pageSize: '500', page: String(pagina) });
+          const r = await pluggy(env, `/investments?${q}`);
+          tudo.push(...(r.results || []).map(invLimpo));
+          if (!r.results?.length || pagina >= (r.totalPages ?? 1)) break;
+        }
+        return json({ investimentos: tudo });
+      }
+
       if (rota === '/item') {
         const itemId = url.searchParams.get('itemId');
         if (!itemId) return json({ erro: 'falta_itemId' }, 400);
@@ -133,6 +146,18 @@ const contaLimpa = (c) => ({
   limite: c.creditData?.creditLimit ?? null,
   fecha: c.creditData?.balanceCloseDate ?? null,
   vence: c.creditData?.balanceDueDate ?? null,
+});
+
+const invLimpo = (i) => ({
+  id: i.id,
+  nome: i.name,
+  codigo: i.code || '',            // ticker nas ações, CNPJ nos fundos
+  tipo: i.type,                    // EQUITY | ETF | FIXED_INCOME | MUTUAL_FUND | ...
+  subtipo: i.subtype || '',        // STOCK | REAL_ESTATE_FUND | ...
+  saldo: i.balance,                // valor líquido hoje
+  aplicado: i.amount ?? null,      // bruto aplicado, com impostos
+  cotas: i.quantity ?? null,
+  unitario: i.value ?? null,
 });
 
 const lancLimpo = (t) => ({
