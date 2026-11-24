@@ -313,7 +313,15 @@ function importar(inp){
 
 function iniciar(){
   render();
-  if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  if('serviceWorker' in navigator){
+    const jaControlado=!!navigator.serviceWorker.controller;
+    let recarregando=false;
+    navigator.serviceWorker.addEventListener('controllerchange',()=>{
+      // só recarrega quando uma versão nova assume, nunca na primeira instalação
+      if(jaControlado&&!recarregando){recarregando=true;location.reload()}
+    });
+    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  }
   const velho=!cfg.cotTs||(Date.now()-cfg.cotTs)>15*60*1000;
   if(velho)buscarCotacoes(true);
   addEventListener('visibilitychange',()=>{

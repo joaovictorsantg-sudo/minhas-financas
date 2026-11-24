@@ -1,4 +1,4 @@
-const CACHE = 'financas-v1';
+const CACHE = 'financas-v2';
 const SHELL = [
   './', './index.html', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png',
@@ -20,12 +20,24 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
-  const url = new URL(req.url);
+  if (new URL(req.url).origin !== location.origin) return; // cotações vão direto à rede
 
-  // cotações e fontes: rede primeiro, nunca servir preço velho do cache
-  if (url.origin !== location.origin) return;
+  const ehPagina = req.mode === 'navigate' || req.destination === 'document';
 
-  // app shell: cache primeiro, atualiza em segundo plano
+  if (ehPagina) {
+    // rede primeiro: uma versão nova aparece já na primeira abertura
+    e.respondWith(
+      fetch(req)
+        .then(res => {
+          if (res && res.ok) caches.open(CACHE).then(c => c.put(req, res.clone()));
+          return res;
+        })
+        .catch(() => caches.match(req).then(hit => hit || caches.match('./index.html')))
+    );
+    return;
+  }
+
+  // demais arquivos: cache primeiro, revalidando em segundo plano
   e.respondWith(
     caches.match(req).then(hit => {
       const net = fetch(req).then(res => {
