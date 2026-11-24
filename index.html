@@ -210,7 +210,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v54 — 24/11';
+const VERSAO='v55 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1463,6 +1463,7 @@ function aplicaFaturas(lista){
   (lista||[]).forEach(({pg,faturas:fs})=>{
     const c=cartao(pg); if(!c||!(fs||[]).length)return;
     c.datas=c.datas||{}; c.aberturas=c.aberturas||{};
+    // desfaz o ajuste por saldo de versões anteriores: aqui ele não vale mais
     if(c.auto&&c.auto.F){ c.aberturas[c.auto.F]=r2((+c.aberturas[c.auto.F]||0)-(+c.auto.v||0)); delete c.auto }
     Object.keys(c.autoF||{}).forEach(F=>{c.aberturas[F]=r2((+c.aberturas[F]||0)-c.autoF[F])});
     c.autoF={};
@@ -1505,11 +1506,14 @@ function aplicaContas(achadas,comFatura){
   let n=0;
   // o banco só emite a fatura depois que ela fecha, então a aberta quase nunca
   // está na lista: nela o saldo ainda é a única medida que existe
-  const cobre={}, datouBanco=new Set();
+  // Onde o banco manda as faturas, as fechadas vêm exatas e a aberta é a soma
+  // das compras que chegaram. Completar a aberta por saldo exigia somar o que
+  // está em aberto, e uma fatura antiga marcada errado ia parar dentro dela.
+  const comBanco=new Set(), datouBanco=new Set();
   (comFatura||[]).forEach(({pg,faturas:fs})=>{
-    const c=cartao(pg); if(!c)return;
-    cobre[pg]=(fs||[]).some(bl=>bl.total!=null&&chaveFat(c,bl)===fatAberta(c));
-    if((fs||[]).some(bl=>bl.fecha&&bl.vence))datouBanco.add(pg);
+    if(!cartao(pg)||!(fs||[]).length)return;
+    comBanco.add(pg);
+    if(fs.some(bl=>bl.fecha&&bl.vence))datouBanco.add(pg);
   });
   (achadas||[]).forEach(a=>{
     if(!a.pg)return;
@@ -1530,8 +1534,8 @@ function aplicaContas(achadas,comFatura){
       // medir contra uma fatura só empurra para ela a dívida das outras. E o
       // ajuste é refeito, não somado — senão cada sincronização empilha mais
       // um, e o do mês anterior fica congelado numa fatura que já passou.
-      // o saldo é tudo o que se deve; onde o banco já emitiu a fatura, ela manda
-      if(a.saldo!=null&&c.doBanco!==false&&!cobre[a.pg]){
+      // sem faturas do banco, o saldo é a única medida que existe
+      if(a.saldo!=null&&c.doBanco!==false&&!comBanco.has(a.pg)){
         c.aberturas=c.aberturas||{};
         if(c.auto&&c.auto.F)c.aberturas[c.auto.F]=r2((+c.aberturas[c.auto.F]||0)-(+c.auto.v||0));
         const F=fatAberta(c), fs=faturas(c);
