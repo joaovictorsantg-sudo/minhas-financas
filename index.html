@@ -210,7 +210,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v53 — 24/11';
+const VERSAO='v54 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1480,8 +1480,13 @@ function aplicaFaturas(lista){
       if(bl.total==null)return;
       const F=chaveFat(c,bl); if(!F)return;
       const v=r2(Math.abs(bl.total)-r2(atuais[F]||0));
-      if(Math.abs(v)<0.005)return;
-      c.aberturas[F]=r2((+c.aberturas[F]||0)+v); c.autoF[F]=v;
+      if(Math.abs(v)>=0.005){c.aberturas[F]=r2((+c.aberturas[F]||0)+v); c.autoF[F]=v}
+      // quem sabe se a fatura foi paga é o banco; sem isso todo histórico que
+      // ele manda volta marcado em aberto
+      const K=pagaKey(c,F), reg=cfg.faturasPagas[K];
+      const quitada=bl.pago!=null&&Math.abs(bl.total)>0&&bl.pago>=Math.abs(bl.total)-0.01;
+      if(quitada&&!reg)cfg.faturasPagas[K]={c:c.conta,d:bl.pagoEm||vencISO(c,F),auto:1};
+      else if(!quitada&&reg&&reg.auto)delete cfg.faturasPagas[K];
     });
     Object.keys(c.aberturas).forEach(K=>{if(Math.abs(c.aberturas[K])<0.005)delete c.aberturas[K]});
     n++;

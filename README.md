@@ -155,7 +155,8 @@ planejamento mostra o gasto do mês e convida a definir um, em vez de
 acusar estouro contra uma meta que ninguém escreveu.
 
 A fatura do cartão vem pronta do banco: data de fechamento, de
-vencimento e total de cada mês. Ela manda sobre o ciclo deduzido, o que
+vencimento, total e os pagamentos feitos nela — quem sabe se foi paga é
+quem recebeu. Ela manda sobre o ciclo deduzido, o que
 resolve sozinho a virada do dia de fechamento e o mês em que o banco não
 emitiu fatura nenhuma. O ajuste que completa a diferença entre o total
 do banco e os lançamentos já conhecidos é refeito a cada sincronização,

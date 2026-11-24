@@ -178,13 +178,19 @@ const invLimpo = (i) => ({
 // a fatura vem pronta da Pluggy: datas e total, sem deduzir ciclo
 const soDia = (d) => (typeof d === 'string' && d.length >= 10 ? d.slice(0, 10) : null);
 const cent = (v) => (v == null || isNaN(+v) ? null : Math.round(+v * 100) / 100);
-const faturaLimpa = (b) => ({
-  id: b.id,
-  vence: soDia(b.dueDate),
-  fecha: soDia(b.billClosingDate),
-  total: cent(b.totalAmount),
-  minimo: cent(b.minimumPaymentAmount),
-});
+const faturaLimpa = (b) => {
+  const pgs = Array.isArray(b.payments) ? b.payments : [];
+  return {
+    id: b.id,
+    vence: soDia(b.dueDate),
+    fecha: soDia(b.billClosingDate),
+    total: cent(b.totalAmount),
+    minimo: cent(b.minimumPaymentAmount),
+    // o banco sabe o que já foi pago: sem isso toda fatura antiga volta em aberto
+    pago: pgs.length ? cent(pgs.reduce((s, p) => s + Math.abs(+p.amount || 0), 0)) : null,
+    pagoEm: pgs.map((p) => soDia(p.paymentDate)).filter(Boolean).sort().pop() || null,
+  };
+};
 
 const lancLimpo = (t) => ({
   id: t.id,
