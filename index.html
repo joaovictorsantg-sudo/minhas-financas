@@ -191,7 +191,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v18 — 24/11';
+const VERSAO='v19 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -215,7 +215,7 @@ const r2=v=>Math.round(v*100)/100;
 const r4=v=>Math.round(v*10000)/10000;
 
 const DEF={
-  salario:0, metaInvest:0, cotAt:'', cotTs:0, salarioQuando:'pu',
+  salario:0, metaInvest:0, cotAt:'', cotTs:0, salarioQuando:'pu', nome:'',
   contas:[
     {id:'conta',emoji:'🏦',nome:'Conta',saldo:0},
     {id:'dinheiro',emoji:'💵',nome:'Dinheiro',saldo:0}
@@ -847,14 +847,26 @@ function dicasOFX(txt){
   return {org:org.trim(),cartao,saldo:isFinite(v)?v:null};
 }
 // o que não é gasto nem receita: transferências entre as suas próprias contas
+const semAcento=x=>String(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+function ehVoce(desc){
+  const n=semAcento(cfg.nome).replace(/\s+/g,' ').trim();
+  if(n.length<6)return false;
+  const d=semAcento(desc);
+  if(d.includes(n))return true;
+  // "Joao Victor Santos" x "Joao Victor Gabriel dos Santos": primeiro e último nome bastam
+  const ps=n.split(' ').filter(x=>x.length>2);
+  if(ps.length<2)return false;
+  return d.includes(ps[0])&&d.includes(ps[ps.length-1]);
+}
 function natureza(desc){
   const d=String(desc||'');
+  if(ehVoce(d))return 'transferencia';
   if(/pagamento.*fatura|fatura.*cart|fatura picpay|fatura inter/i.test(d))return 'fatura';
   if(/aplica[çc][aã]o|resgate|resgatad|\bcdb\b|tesouro|nota bov|d[ée]bito b3|porq obj|cofrinho/i.test(d))return 'investimento';
   if(/cr[ée]dito liberado|pix no cr[ée]dito/i.test(d))return 'credito';
   return '';
 }
-const ROTULO={fatura:'pagamento de fatura',investimento:'aplicação ou resgate',credito:'crédito liberado'};
+const ROTULO={fatura:'pagamento de fatura',investimento:'aplicação ou resgate',credito:'crédito liberado',transferencia:'transferência entre suas contas'};
 // como a compra foi paga, quando o banco conta
 function metodo(t){
   const d=(t.memo||'')+' '+(t.desc||'');
@@ -1350,7 +1362,7 @@ function abrirAjustes(){
   formAjustes();
 }
 function lerAjustes(){
-  rasc.salario=r2(num(val('j_sal'))||0);rasc.metaInvest=r2(num(val('j_mi'))||0);rasc.salarioQuando=val('j_sq')||'pu';
+  rasc.salario=r2(num(val('j_sal'))||0);rasc.metaInvest=r2(num(val('j_mi'))||0);rasc.salarioQuando=val('j_sq')||'pu';rasc.nome=(val('j_nome')||'').trim();
   rasc.contas.forEach((c,i)=>{
     const novo=r2(num(val('t_s'+i))||0), visto=rasc._visto?rasc._visto[c.id]:undefined;
     if(visto===undefined){c.saldo=novo}
@@ -1365,6 +1377,8 @@ function lerAjustes(){
 function formAjustes(){
   const tot=rasc.categorias.reduce((s,c)=>s+(+c.orc||0),0);
   let h=cab('Ajustes')+`<div class="two"><div><label>Salário líquido</label><input id="j_sal" inputmode="decimal" value="${n2(rasc.salario)}"></div><div><label>Meta de investir por mês</label><input id="j_mi" inputmode="decimal" value="${n2(rasc.metaInvest)}"></div></div>
+  <label>Seu nome, como aparece no extrato</label><input id="j_nome" value="${esc(rasc.nome||'')}" placeholder="João Victor Santos" autocomplete="off">
+  <p class="hint" style="padding-left:0">Serve para reconhecer Pix entre suas próprias contas, que não é gasto nem receita. Pode deixar vazio.</p>
   <label>Quando o salário cai</label><select id="j_sq">${
     [['pu','Penúltimo dia útil do mês'],['u','Último dia útil do mês']]
       .concat(Array.from({length:28},(_,i)=>[String(i+1),'Todo dia '+(i+1)]))
