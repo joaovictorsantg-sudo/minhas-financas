@@ -101,6 +101,10 @@ investido vai ficar e avisa quais posições suas não casaram com nenhuma
 do banco — é assim que se percebe que a mesma aplicação está prestes a
 entrar duas vezes.
 
+Orçamento não definido não é orçamento de zero. Sem ele a tela de
+planejamento mostra o gasto do mês e convida a definir um, em vez de
+acusar estouro contra uma meta que ninguém escreveu.
+
 Repetido é reconhecido pelo id do banco e também pela data, valor e
 descrição. Reconectar um banco gera ids novos para as mesmas transações,
 e só pelo id o histórico inteiro voltaria como novidade. Duas compras

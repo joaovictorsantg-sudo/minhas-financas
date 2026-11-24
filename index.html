@@ -195,7 +195,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v35 — 24/11';
+const VERSAO='v36 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -452,7 +452,8 @@ function ritmo(M){
 function mnav(){return `<div class="mnav"><b>${nomeMes(st.mes)}</b><span class="sp"></span>
 <button onclick="mudaMes(-1)" aria-label="Mês anterior"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
 <button onclick="mudaMes(1)" aria-label="Próximo mês"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button></div>`}
-function barra(g,o,inv){const p=o>0?g/o:(g>0?1:0);const c=inv?(p>=1?'ok':''):(p>1?'hot':p>.85?'warn':'');
+// sem orçamento não há o que estourar: barra vazia, não cheia
+function barra(g,o,inv){const p=o>0?g/o:0;const c=inv?(p>=1?'ok':''):(p>1?'hot':p>.85?'warn':'');
   return `<div class="bar"><i class="${c}" style="width:${Math.min(100,p*100)}%"></i></div>`}
 function linha({tx,p}){
   const rv=tx.t==='r',ap=tx.t==='a';
@@ -601,16 +602,21 @@ planos(){
   <div class="acts"><button class="btn g" onclick="abrirAjustes()">Editar o plano</button></div></div>`;
 
   const R=ritmo(M), adiantado=R.pGasto>R.pMes+.08, folgado=R.pGasto<R.pMes-.08;
-  h+=`<h2>Como está ${MES[+M.slice(5)-1]}</h2>
-  <div class="hero"><span class="lbl">Resta do orçamento</span>
+  h+=`<h2>Como está ${MES[+M.slice(5)-1]}</h2>`;
+  // sem orçamento não dá para dizer que estourou nem que sobrou: só o gasto é fato
+  h+=o>0?`<div class="hero"><span class="lbl">Resta do orçamento</span>
   <span class="vbig ${R.livre<0?'down':''}">${money(R.livre)}</span>
   <div class="gauge"><div class="fill ${R.pGasto>1?'hot':adiantado?'':'ok'}" style="width:${Math.min(100,R.pGasto*100)}%"></div>
   ${R.dia?`<div class="mark" style="left:${Math.min(99.5,R.pMes*100)}%"></div>`:''}</div>
   <div class="lbl" style="margin-top:12px">Você gastou ${money(R.gasto)} dos ${money(R.orc)} planejados${R.dia?`, e o mês está no dia ${R.dia} de ${R.dias}`:''}.
-  ${R.dia?(R.pGasto>1?' O orçamento já estourou.':adiantado?' Está correndo na frente do calendário.':folgado?' Está sobrando mais do que o esperado para esta altura.':' Está no ritmo certo.'):''}</div></div>
-  <div class="grp"><div class="pad">
-  <div style="display:flex;align-items:baseline"><span>Gasto</span><span style="flex:1"></span><span class="vmid">${money(r.desp)}</span><span class="lbl"> de ${brl(o)}</span></div>${barra(r.desp,o)}
-  <div style="display:flex;align-items:baseline;margin-top:16px"><span>Investido</span><span style="flex:1"></span><span class="vmid">${money(r.apo)}</span><span class="lbl"> de ${brl(cfg.metaInvest)}</span></div>${barra(r.apo,cfg.metaInvest,1)}
+  ${R.dia?(R.pGasto>1?' O orçamento já estourou.':adiantado?' Está correndo na frente do calendário.':folgado?' Está sobrando mais do que o esperado para esta altura.':' Está no ritmo certo.'):''}</div></div>`
+  :`<div class="hero"><span class="lbl">Gasto em ${MES[+M.slice(5)-1].toLowerCase()}</span>
+  <span class="vbig">${money(R.gasto)}</span>
+  <div class="lbl" style="margin-top:12px">Você ainda não disse quanto quer gastar por mês${R.dia?`. O mês está no dia ${R.dia} de ${R.dias}`:''}. Com um orçamento definido, aqui aparece quanto resta e se o ritmo está certo.</div>
+  <div class="acts"><button class="btn s" onclick="abrirAjustes()">Definir orçamento</button></div></div>`;
+  h+=`<div class="grp"><div class="pad">
+  <div style="display:flex;align-items:baseline"><span>Gasto</span><span style="flex:1"></span><span class="vmid">${money(r.desp)}</span>${o>0?`<span class="lbl"> de ${brl(o)}</span>`:''}</div>${barra(r.desp,o)}
+  <div style="display:flex;align-items:baseline;margin-top:16px"><span>Investido</span><span style="flex:1"></span><span class="vmid">${money(r.apo)}</span>${cfg.metaInvest>0?`<span class="lbl"> de ${brl(cfg.metaInvest)}</span>`:''}</div>${barra(r.apo,cfg.metaInvest,1)}
   <div style="display:flex;align-items:baseline;margin-top:16px"><span>Entrou</span><span style="flex:1"></span><span class="vmid up">${money(r.rec)}</span></div></div></div>`;
 
   h+=`<h2>Orçamento por categoria<span class="sp"></span><a onclick="abrirAjustes()">editar</a></h2><div class="grp">`;
@@ -618,8 +624,8 @@ planos(){
   const vis=cats.filter(c=>(+c.orc||0)>0||(r.porCat[c.id]||0)>0);
   if(!vis.length)h+=`<div class="blank">Nenhuma categoria com orçamento.<div style="margin-top:16px"><button class="btn s" onclick="abrirAjustes()">Definir orçamento</button></div></div>`;
   vis.forEach(c=>{const g=r2(r.porCat[c.id]||0),oc=+c.orc||0,resta=r2(oc-g);
-    h+=`<div class="env" onclick="st.filtro='${c.id}';ir('lanc')"><div class="top"><span class="nm">${c.emoji} ${esc(c.nome)}</span><span class="vmid">${money(g)}</span><span class="lbl">de ${brl(oc)}</span></div>
-    ${barra(g,oc)}<div class="sub">${resta>=0?'Resta '+brl(resta):'<span class="down">Passou '+brl(-resta)+' do planejado</span>'}</div></div>`});
+    h+=`<div class="env" onclick="st.filtro='${c.id}';ir('lanc')"><div class="top"><span class="nm">${c.emoji} ${esc(c.nome)}</span><span class="vmid">${money(g)}</span>${oc>0?`<span class="lbl">de ${brl(oc)}</span>`:''}</div>
+    ${barra(g,oc)}<div class="sub">${oc<=0?'sem orçamento definido':resta>=0?'Resta '+brl(resta):'<span class="down">Passou '+brl(-resta)+' do planejado</span>'}</div></div>`});
   h+=`</div>`;
 
   h+=`<h2>Objetivos<span class="sp"></span><a onclick="formObj()">novo objetivo</a></h2>`;
