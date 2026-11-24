@@ -302,12 +302,19 @@ function exportar(){
 function importar(inp){
   const f=inp.files&&inp.files[0];if(!f)return;
   const fr=new FileReader();
-  fr.onload=()=>{try{
-    const j=JSON.parse(fr.result);
-    if(!j||!j.cfg)return toast('Arquivo não parece um backup deste app');
-    cfg=Object.assign(clone(DEF),j.cfg);meses=j.meses||{};rasc=null;
-    cache();fechar();render();toast('Backup restaurado');
-  }catch(e){toast('Não deu para ler o arquivo')}};
+  fr.onerror=()=>toast('Não deu para abrir o arquivo');
+  fr.onload=()=>{
+    let j;
+    try{j=JSON.parse(fr.result)}
+    catch(e){inp.value='';return toast('Esse arquivo não é um backup. Procure o .json que termina com a data.')}
+    if(!j||!j.cfg){inp.value='';return toast('Esse .json não é um backup deste app.')}
+    try{
+      cfg=Object.assign(clone(DEF),j.cfg);meses=j.meses||{};rasc=null;
+      cache();inp.value='';fechar();render();
+      const n=cfg.cartoes.length,a=cfg.ativos.length;
+      toast('Restaurado: '+n+' cart'+(n===1?'ão':'ões')+' e '+a+' investimento'+(a===1?'':'s'));
+    }catch(e){inp.value='';toast('O arquivo abriu, mas veio incompleto')}
+  };
   fr.readAsText(f);
 }
 
@@ -799,7 +806,7 @@ function formAjustes(){
   <h4>Backup</h4><p class="hint" style="padding-left:0">Seus dados ficam neste aparelho. Baixe um backup de vez em quando, ou para levar para outro celular.</p>
   <div class="acts"><button class="btn g" onclick="exportar()">Baixar backup</button>
   <button class="btn g" onclick="document.getElementById('imp').click()">Restaurar backup</button></div>
-  <input type="file" id="imp" accept="application/json,.json" style="display:none" onchange="importar(this)">
+  <input type="file" id="imp" style="display:none" onchange="importar(this)">
   <div class="acts"><button class="btn g" onclick="fechar()">Cancelar</button><button class="btn" onclick="salvarAjustes()">Salvar</button></div>`;
   abrir(h);
 }
