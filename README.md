@@ -101,6 +101,11 @@ investido vai ficar e avisa quais posições suas não casaram com nenhuma
 do banco — é assim que se percebe que a mesma aplicação está prestes a
 entrar duas vezes.
 
+Na virada do ciclo uma fatura pode fechar e vencer em datas que não são
+as de sempre, ou deixar de existir, quando o banco junta dois ciclos num
+só. Ambos se ajustam por fatura, e o dia de fechamento escolhido decide
+quais compras caem nela e quais passam para a seguinte.
+
 No extrato de um cartão vêm, junto das compras, o pagamento da própria
 fatura, amortizações e ajustes. Cada um deles carrega o valor da fatura
 inteira, então entram como se fossem a maior compra do mês e dobram o

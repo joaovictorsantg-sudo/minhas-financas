@@ -195,7 +195,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v39 — 24/11';
+const VERSAO='v41 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -388,9 +388,10 @@ function partes(tx){
   // veio de uma fatura em PDF: pertence inteira àquela fatura
   if(c0&&tx.fat)return [{comp:mesVenc(c0,tx.fat),fat:tx.fat,v:tx.v,i:1,n:1}];
   const n=Math.max(1,tx.parc||1),base=mk(tx.data),c=c0;
-  let f0=null;if(c)f0=(+tx.data.slice(8,10)>=c.fecha)?addM(base,1):base;
+  // o dia de corte é o da fatura daquele mês, que pode ter data própria
+  let f0=null;if(c)f0=proxFat(c,(+tx.data.slice(8,10)>=fechaDia(c,base))?addM(base,1):base);
   const tot=Math.round(tx.v*100),each=Math.floor(tot/n),out=[];
-  for(let i=0;i<n;i++)out.push({comp:addM(base,i),fat:c?addM(f0,i):null,v:(i<n-1?each:tot-each*(n-1))/100,i:i+1,n});
+  for(let i=0;i<n;i++)out.push({comp:addM(base,i),fat:c?proxFat(c,addM(f0,i)):null,v:(i<n-1?each:tot-each*(n-1))/100,i:i+1,n});
   return out;
 }
 function doMes(M){
@@ -403,10 +404,19 @@ function resumo(M){
   return{rec:r2(rec),desp:r2(desp),apo:r2(apo),sobra:r2(rec-desp-apo),porCat};
 }
 const orcTotal=()=>r2(cfg.categorias.reduce((s,c)=>s+(+c.orc||0),0));
-const fatAberta=c=>{const h=hoje();return +h.slice(8,10)>=c.fecha?addM(mk(h),1):mk(h)};
-const mesVenc=(c,F)=>c.vence>c.fecha?F:addM(F,1);
-const fechaData=(c,F)=>p2(c.fecha)+'/'+F.slice(5,7);
-const venceData=(c,F)=>p2(c.vence)+'/'+mesVenc(c,F).slice(5,7);
+// mudar o dia de fechamento faz o banco juntar dois ciclos num só, e uma
+// fatura deixa de existir. O que cairia nela entra na seguinte.
+const pulada=(c,F)=>!!(c&&c.pula&&c.pula.indexOf(F)>=0);
+const proxFat=(c,F)=>{let f=F;for(let i=0;i<24&&pulada(c,f);i++)f=addM(f,1);return f};
+const fatAberta=c=>{const h=hoje(),M=mk(h);return proxFat(c,+h.slice(8,10)>=fechaDia(c,M)?addM(M,1):M)};
+// uma fatura pode ter dias próprios: na virada do ciclo o banco fecha e
+// cobra em datas que não são as de sempre
+const diasFat=(c,F)=>(c&&c.datas&&c.datas[F])||null;
+const fechaDia=(c,F)=>{const d=diasFat(c,F);return (d&&+d.f)||+c.fecha};
+const venceDia=(c,F)=>{const d=diasFat(c,F);return (d&&+d.v)||+c.vence};
+const mesVenc=(c,F)=>venceDia(c,F)>fechaDia(c,F)?F:addM(F,1);
+const fechaData=(c,F)=>p2(fechaDia(c,F))+'/'+F.slice(5,7);
+const venceData=(c,F)=>p2(venceDia(c,F))+'/'+mesVenc(c,F).slice(5,7);
 const pagaKey=(c,F)=>c.id+':'+F;
 const paga=(c,F)=>!!cfg.faturasPagas[pagaKey(c,F)];
 function pagaPor(c,F){
@@ -418,7 +428,8 @@ function pagaPor(c,F){
 const pagaEm=(c,F)=>{const v=cfg.faturasPagas[pagaKey(c,F)];return (v&&typeof v==='object'&&v.d)||''};
 const vencISO=(c,F)=>{const mv=mesVenc(c,F);return mv+'-'+p2(Math.min(c.vence,diasNo(mv)))};
 function faturas(c){
-  const m=Object.assign({},c.aberturas||{});
+  const m={};
+  Object.keys(c.aberturas||{}).forEach(F=>{const K=proxFat(c,F);m[K]=r2((m[K]||0)+c.aberturas[F])});
   todos().forEach(tx=>{if(tx.pg!==c.id||tx.t!=='d')return;partes(tx).forEach(p=>m[p.fat]=r2((m[p.fat]||0)+p.v))});
   return m;
 }
@@ -568,7 +579,9 @@ cartoes(){
     lista.forEach(F=>{const pg=paga(c,F);
       const tg=pg?'<span class="tag ok">paga</span>':F<A?'<span class="tag hot">fechada</span>':F===A?'<span class="tag warn">aberta</span>':'<span class="tag">futura</span>';
       h+=`<div class="row" style="cursor:default"><span class="mid"><span class="t1">Fatura de ${curtoMes(mesVenc(c,F))} ${tg}</span><span class="t2">fecha ${fechaData(c,F)}, vence ${venceData(c,F)}${paga(c,F)&&pagaEm(c,F)?' · paga em '+dataBR(pagaEm(c,F)):''}</span></span>
-      <span class="end vmid">${money(f[F])}</span>${F<=A||pg?`<button class="btn ${pg?'g':''} s" onclick="pagarFatura('${c.id}','${F}')">${pg?'Desfazer':'Paguei'}</button>`:''}</div>`});
+      <span class="end vmid">${money(f[F])}</span>${F<=A||pg?`<button class="btn ${pg?'g':''} s" onclick="pagarFatura('${c.id}','${F}')">${pg?'Desfazer':'Paguei'}</button>`
+       :''}<button class="btn g s" onclick="formDatasFat('${c.id}','${F}')" aria-label="Datas desta fatura">datas</button></div>`});
+    if((c.pula||[]).length)h+=`<div style="display:block;padding:10px 16px" class="lbl">Faturas marcadas como inexistentes: ${c.pula.slice().sort().map(F=>`${curtoMes(mesVenc(c,F))} <a onclick="despulaFatura('${c.id}','${F}')">desfazer</a>`).join(' · ')}</div>`;
     h+=`</div></div>`;
   });
   h+=`<div class="acts"><button class="btn g" onclick="formCartao()">Adicionar cartão</button></div>
@@ -1353,6 +1366,49 @@ function aplicaOrcAuto(){
   });
   salvarCfg();fechar();render();
   toast('Orçamento definido em '+n+(n===1?' categoria':' categorias'));
+}
+// o banco juntou dois ciclos: a fatura marcada some e o que estava nela
+// passa para a seguinte, junto com o saldo anterior que estivesse ali
+function formDatasFat(cid,F){
+  const c=cartao(cid); if(!c)return;
+  const d=diasFat(c,F), prop=!!d;
+  abrir(cab('Fatura de '+curtoMes(mesVenc(c,F)))+
+  `<p class="hint" style="padding-left:0">Normalmente este cartão fecha dia ${c.fecha} e vence dia ${c.vence}. Aqui você muda só esta fatura, para quando o banco adianta ou atrasa o ciclo.</p>
+  <div class="two"><div><label>Fecha dia</label><input id="df_f" inputmode="numeric" value="${fechaDia(c,F)}"></div>
+  <div><label>Vence dia</label><input id="df_v" inputmode="numeric" value="${venceDia(c,F)}"></div></div>
+  <p class="hint" style="padding-left:0">Mudar o dia de fechamento muda quais compras caem nesta fatura e quais vão para a seguinte.</p>
+  <div class="acts"><button class="btn g" onclick="fechar()">Cancelar</button>
+  ${prop?`<button class="btn d" onclick="limpaDatasFat('${cid}','${F}')">Usar as do cartão</button>`:''}
+  <button class="btn" onclick="salvaDatasFat('${cid}','${F}')">Salvar</button></div>
+  ${paga(c,F)?'':`<div class="acts fim"><button class="btn g" onclick="pulaFatura('${cid}','${F}')">Esta fatura não existe</button></div>
+  <p class="hint" style="padding-left:0">Use quando o banco juntou dois ciclos: o que está nela passa para a seguinte.</p>`}`);
+}
+function salvaDatasFat(cid,F){
+  const c=cartao(cid); if(!c)return;
+  const fd=Math.min(31,Math.max(1,parseInt(val('df_f'))||0)), vd=Math.min(31,Math.max(1,parseInt(val('df_v'))||0));
+  if(!fd||!vd)return toast('Preencha os dois dias');
+  if(fd===+c.fecha&&vd===+c.vence)return limpaDatasFat(cid,F);
+  c.datas=c.datas||{}; c.datas[F]={f:fd,v:vd};
+  salvarCfg();fechar();render();toast('Fatura fecha '+fechaData(c,F)+' e vence '+venceData(c,F));
+}
+function limpaDatasFat(cid,F){
+  const c=cartao(cid); if(!c||!c.datas)return;
+  delete c.datas[F]; if(!Object.keys(c.datas).length)delete c.datas;
+  salvarCfg();fechar();render();toast('Voltou para os dias do cartão');
+}
+function pulaFatura(cid,F){
+  const c=cartao(cid); if(!c)return;
+  if(paga(c,F))return toast('Essa fatura está marcada como paga. Desfaça o pagamento antes.');
+  c.pula=(c.pula||[]).concat([F]);
+  const v=r2(faturas(c)[proxFat(c,F)]||0);
+  salvarCfg();render();
+  toast('Fatura removida. O que estava nela foi para '+curtoMes(mesVenc(c,proxFat(c,F)))+', que agora soma '+brl(v));
+}
+function despulaFatura(cid,F){
+  const c=cartao(cid); if(!c)return;
+  c.pula=(c.pula||[]).filter(x=>x!==F);
+  if(!c.pula.length)delete c.pula;
+  salvarCfg();render();toast('Fatura de volta');
 }
 function formPagtos(){
   const o=pagtosNoCartao(); if(!o.length)return toast('Nada para limpar');
