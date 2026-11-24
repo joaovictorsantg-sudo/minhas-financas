@@ -53,6 +53,17 @@ confirmar. Escolha no topo se aquele extrato é de uma conta ou de um
 cartão; em cartão, os pagamentos de fatura são ignorados, já que não são
 gastos novos.
 
+Faturas de cartão em **PDF** também são lidas, para os bancos que só
+oferecem esse formato. O pdf.js vai junto no repositório, em `vendor/`,
+carregado só quando um PDF é escolhido — nada de CDN, e funciona offline
+depois da primeira vez.
+
+Numa fatura em PDF todos os lançamentos vão para a fatura daquele
+vencimento, inclusive parcelas compradas meses antes, que é como o
+cartão de fato cobra. Fatura fechada costuma já estar paga: marque-a
+como paga em *Cartões* depois de importar, senão ela prende limite à
+toa.
+
 ### O que o app faz sozinho ao importar
 
 - Descobre se o arquivo é de conta ou de cartão, e de qual banco, pelo

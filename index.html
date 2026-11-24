@@ -191,7 +191,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v15 — 24/11';
+const VERSAO='v16 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -371,7 +371,10 @@ const catInfo=id=>cfg.categorias.find(c=>c.id===id)||RECS.find(c=>c.id===id)||{e
 const ativo=id=>cfg.ativos.find(a=>a.id===id);
 const pgNome=id=>{const c=cartao(id);if(c)return 'Cartão '+c.nome;const k=conta(id);return k?k.nome:id};
 function partes(tx){
-  const n=Math.max(1,tx.parc||1),base=mk(tx.data),c=cartao(tx.pg);
+  const c0=cartao(tx.pg);
+  // veio de uma fatura em PDF: pertence inteira àquela fatura
+  if(c0&&tx.fat)return [{comp:mesVenc(c0,tx.fat),fat:tx.fat,v:tx.v,i:1,n:1}];
+  const n=Math.max(1,tx.parc||1),base=mk(tx.data),c=c0;
   let f0=null;if(c)f0=(+tx.data.slice(8,10)>=c.fecha)?addM(base,1):base;
   const tot=Math.round(tx.v*100),each=Math.floor(tot/n),out=[];
   for(let i=0;i<n;i++)out.push({comp:addM(base,i),fat:c?addM(f0,i):null,v:(i<n-1?each:tot-each*(n-1))/100,i:i+1,n});
@@ -786,7 +789,8 @@ function categorizar(desc,ehEntrada){
     for(const id of r.ids) if(cfg.categorias.some(c=>c.id===id)) return id;
   return (cfg.categorias.find(c=>c.id==='outros')||cfg.categorias[cfg.categorias.length-1]||{}).id||'outros';
 }
-const limpaDesc=d=>String(d||'').replace(/\s+/g,' ').replace(/^\W+|\W+$/g,'').slice(0,60)||'Lançamento';
+const limpaDesc=d=>String(d||'').replace(/\s+/g,' ')
+  .replace(/^[\s\-–—·|,;:]+|[\s\-–—·|,;:]+$/g,'').slice(0,60)||'Lançamento';
 const chaveTx=t=>t.fit?('f:'+t.fit):('h:'+t.data+'|'+t.v.toFixed(2)+'|'+limpaDesc(t.desc).toLowerCase().slice(0,24));
 
 function parseOFX(txt){
@@ -950,6 +954,7 @@ let imp=null;
 function lerExtrato(inp){
   const f=inp.files&&inp.files[0]; if(!f)return;
   inp.value='';
+  if(/\.pdf$/i.test(f.name||'')||f.type==='application/pdf')return lerFaturaPDF(f);
   const ler=cod=>new Promise((ok,erro)=>{
     const fr=new FileReader(); fr.onerror=erro;
     fr.onload=()=>ok(String(fr.result||'')); fr.readAsText(f,cod);
@@ -984,6 +989,29 @@ function pescaBanco(txt){
   const achou=nomes.find(n=>t.includes(n.toLowerCase()));
   return achou||'';
 }
+function lerFaturaPDF(f){
+  toast('Lendo a fatura…');
+  const fr=new FileReader();
+  fr.onerror=()=>toast('Não deu para abrir o PDF');
+  fr.onload=async()=>{
+    let r;
+    try{ r=parseFatura(await pdfEmLinhas(new Uint8Array(fr.result))); }
+    catch(e){ return toast('Não consegui ler esse PDF') }
+    if(!r.itens.length)return toast('Não encontrei lançamentos nessa fatura');
+    const c=cfg.cartoes[0]; if(!c)return toast('Cadastre um cartão primeiro');
+    // a qual fatura do app essa pertence, pelo vencimento impresso
+    let F=null;
+    if(r.venc){const mv=mk(r.venc);F=c.vence>c.fecha?mv:addM(mv,-1)}
+    r.itens.sort((a,b)=>a.data.localeCompare(b.data));
+    imp={pg:c.id,inv:false,saldo:null,ajusta:false,pdf:true,venc:r.venc,total:r.total,fat:F,
+      itens:r.itens.map(t=>{
+        const k=chaveTx(t), dup=todos().some(x=>x.k===k), nat=natureza(t.desc);
+        return {...t,k,dup,nat,quita:null,met:'crédito',usar:!dup&&t.v<0,cat:categorizar(t.desc,false)};
+      })};
+    formImportar();
+  };
+  fr.readAsArrayBuffer(f);
+}
 function destinoProvavel({org,cartao}){
   const lista=cartao?cfg.cartoes:cfg.contas;
   if(org){ // "Banco Intermedium S/A" casa com a conta chamada Inter
@@ -1012,6 +1040,7 @@ function formImportar(){
   let h=cab('Importar extrato')+
   `<label>Esses lançamentos são de</label><select id="ip_pg" onchange="trocaDestino()">${opts.map(o=>`<option value="${o.id}" ${imp.pg===o.id?'selected':''}>${o.n}</option>`).join('')}</select>
   <p class="hint" style="padding-left:0">${imp.itens.length} encontrados${dups?', '+dups+' já estavam lançados':''}${nats?', '+nats+' desmarcados por serem transferência entre suas contas':''}. Marque ou desmarque como quiser.</p>
+  ${imp.pdf?`<div class="note" style="border-left-color:var(--warn)"><b>Fatura em PDF</b>${imp.venc?'Vence em '+dataBR(imp.venc)+'/'+imp.venc.slice(0,4)+'. ':''}${imp.total?'A fatura soma '+brl(imp.total)+'. ':''}Tudo vai para a fatura de ${imp.fat?curtoMes(mesVenc(cartao(imp.pg),imp.fat)):'destino'}, mesmo o que foi comprado antes. Se você já pagou essa fatura, marque como paga depois em Cartões.</div>`:''}
   <div class="trio" style="grid-template-columns:1fr 1fr;margin-top:4px">
     <div><span class="lbl">Entrando</span><b class="up">${ent.length} ${ent.length===1?'entrada':'entradas'}, ${brl(somaE)}</b></div>
     <div><span class="lbl">Saindo</span><b>${gas.length} ${gas.length===1?'gasto':'gastos'}, ${brl(somaG)}</b></div>
@@ -1050,6 +1079,7 @@ function confirmarImport(){
     if(ehCartao&&ent)return; // pagamento de fatura não é lançamento
     const tx={id:uid(),t:ent?'r':'d',v:r2(Math.abs(vv)),desc:t.desc,
       cat:t.cat||categorizar(t.desc,ent),pg:imp.pg,data:t.data,k:t.k};
+    if(imp.fat&&ehCartao)tx.fat=imp.fat;
     const k=mk(t.data); (porMes[k]=porMes[k]||[]).push(tx); n++;
   });
   if(!n&&!quitadas){fechar();return toast('Nada marcado para importar')}
@@ -1064,6 +1094,69 @@ function confirmarImport(){
   toast(msg);
 }
 
+
+/* ---------- fatura em PDF ---------- */
+const MESAB={jan:1,fev:2,mar:3,abr:4,mai:5,jun:6,jul:7,ago:8,set:9,out:10,nov:11,dez:12};
+const L_LANC=/^(\d{1,2})\s*de\s*([a-zç]{3,4})\.?\s*(\d{4})\s*(.*?)\s{2,}(\+\s*)?R\$\s*([\d.]+,\d{2})\s*$/i;
+let pdfLib=null;
+async function carregaPDF(){
+  if(pdfLib)return pdfLib;
+  const m=await import('./vendor/pdf.min.mjs');
+  m.GlobalWorkerOptions.workerSrc='./vendor/pdf.worker.min.mjs';
+  return (pdfLib=m);
+}
+// cada página vira linhas de texto, agrupando por altura e marcando as colunas
+async function pdfEmLinhas(dados){
+  const lib=await carregaPDF();
+  const doc=await lib.getDocument({data:dados,useSystemFonts:true}).promise;
+  const linhas=[];
+  for(let p=1;p<=doc.numPages;p++){
+    const tc=await (await doc.getPage(p)).getTextContent();
+    const porY=new Map();
+    for(const it of tc.items){
+      if(!it.str||!it.str.trim())continue;
+      const y=Math.round(it.transform[5]);
+      const k=[...porY.keys()].find(q=>Math.abs(q-y)<=2);
+      if(k===undefined)porY.set(y,[]);
+      porY.get(k===undefined?y:k).push({x:it.transform[4],s:it.str});
+    }
+    [...porY.entries()].sort((a,b)=>b[0]-a[0]).forEach(([,its])=>{
+      its.sort((a,b)=>a.x-b.x);
+      let t='',fim=null;
+      for(const it of its){
+        if(fim!==null&&it.x-fim>6)t+='  ';
+        t+=it.s; fim=it.x+it.s.length*5;
+      }
+      linhas.push(t.replace(/\s+$/,''));
+    });
+  }
+  return linhas;
+}
+function parseFatura(linhas){
+  const itens=[];
+  for(const l of linhas){
+    const m=L_LANC.exec(String(l).trim()); if(!m)continue;
+    const mes=MESAB[m[2].toLowerCase().slice(0,3)]; if(!mes)continue;
+    const partes=m[4].split(/\s{2,}/).map(x=>x.trim()).filter(Boolean);
+    const mov=partes[0]||'', ben=partes.length>1?partes[partes.length-1]:'';
+    const desc=limpaDesc(mov+((ben&&ben!=='-')?' — '+ben:''));
+    const val=numBR(m[6]); if(!isFinite(val)||val===0)continue;
+    itens.push({data:m[3]+'-'+p2(mes)+'-'+p2(m[1]),v:m[5]?val:-val,desc,fit:''});
+  }
+  const txt=linhas.join('\n');
+  const achaData=rot=>{
+    const i=linhas.findIndex(l=>rot.test(l));
+    if(i<0)return '';
+    for(let j=i;j<Math.min(i+4,linhas.length);j++){
+      const d=/(\d{2})\/(\d{2})\/(\d{4})/.exec(linhas[j]);
+      if(d)return d[3]+'-'+d[2]+'-'+d[1];
+    }
+    return '';
+  };
+  const venc=achaData(/data de vencimento/i);
+  const total=(/despesas do m[êe]s[\s\S]{0,60}?R\$\s*([\d.]+,\d{2})/i.exec(txt)||[])[1];
+  return {itens,venc,total:total?numBR(total):null};
+}
 /* ---------- cartões ---------- */
 const CORES=['#ff7a00','#21c25e','#cc092f','#8a05be','#ec7000','#0057b8','#f5b13d','#45d9a0'];
 function formCartao(id){
