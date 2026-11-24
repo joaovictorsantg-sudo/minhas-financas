@@ -28,21 +28,23 @@
   --acc:#b87407;--accInk:#fff;--up:#0f9d6b;--down:#d8453f;--warn:#a96c05;
 }}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html{-webkit-text-size-adjust:100%}
+html{-webkit-text-size-adjust:100%;height:100%}
 body{margin:0;font-family:Archivo,system-ui,sans-serif;font-size:15px;line-height:1.45;background:var(--base);color:var(--ink);
-  padding-bottom:calc(108px + env(safe-area-inset-bottom,0px));font-variant-numeric:tabular-nums}
+  font-variant-numeric:tabular-nums;
+  height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 button,input,select{font-family:inherit}
 .n{font-variant-numeric:tabular-nums;white-space:nowrap}
 .cur{font-size:.62em;font-weight:500;color:var(--mute);margin-right:.18em;letter-spacing:0}
 
 /* topo */
-header{position:sticky;top:0;z-index:12;background:var(--base);padding:calc(12px + env(safe-area-inset-top,0px)) 18px 10px;
+header{flex:0 0 auto;z-index:12;background:var(--base);padding:calc(12px + env(safe-area-inset-top,0px)) 18px 10px;
   display:flex;align-items:center;gap:10px;border-bottom:1px solid transparent;transition:border-color .2s}
 header.stuck{border-bottom-color:var(--line)}
 header h1{flex:1;margin:0;font-size:19px;font-weight:600;letter-spacing:-.015em}
 .icbtn{width:38px;height:38px;border:0;border-radius:12px;background:var(--surf);color:var(--ink2);display:grid;place-items:center;cursor:pointer}
 .icbtn:active{background:var(--surf2)}
-main{padding:0 16px;max-width:600px;margin:0 auto}
+main{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:0 16px calc(24px + env(safe-area-inset-bottom,0px));max-width:600px;margin:0 auto;width:100%}
 
 /* navegação de mês */
 .mnav{display:flex;align-items:center;gap:4px;margin:4px 0 14px}
@@ -131,7 +133,7 @@ h2 a{font-size:13px;font-weight:500;color:var(--acc);cursor:pointer;text-decorat
   padding:12px 0 calc(6px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line)}
 
 /* barra inferior */
-nav{position:fixed;left:0;right:0;bottom:0;z-index:12;background:var(--surf);border-top:1px solid var(--line);
+nav{flex:0 0 auto;z-index:12;background:var(--surf);border-top:1px solid var(--line);
   display:flex;padding:8px 6px calc(10px + env(safe-area-inset-bottom,0px))}
 nav button{flex:1;border:0;background:none;color:var(--mute);font-size:10.5px;font-weight:500;cursor:pointer;
   display:flex;flex-direction:column;align-items:center;gap:3px;padding:3px 2px;border-radius:10px}
@@ -146,7 +148,7 @@ nav button.on{color:var(--acc)}
 .ov{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:30;display:none;align-items:flex-end;justify-content:center}
 .ov.on{display:flex}
 .sheet{background:var(--base);width:100%;max-width:600px;border-radius:24px 24px 0 0;padding:0 18px calc(28px + env(safe-area-inset-bottom,0px));
-  max-height:92vh;overflow:auto;overscroll-behavior:contain;position:relative}
+  max-height:92vh;max-height:92dvh;overflow:auto;overscroll-behavior:contain;position:relative}
 .handle{width:38px;height:4px;border-radius:2px;background:var(--line2);margin:10px auto 2px}
 .sheet h3{margin:0 0 4px;font-size:19px;font-weight:600;letter-spacing:-.02em;display:flex;align-items:center;gap:8px;
   position:sticky;top:0;z-index:2;background:var(--base);padding:10px 0 10px}
@@ -195,7 +197,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v46 — 24/11';
+const VERSAO='v47 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -756,9 +758,9 @@ function render(){
   $('#main').innerHTML=V[st.tab]();
   $('#nav').innerHTML=ABAS.map(([k,n])=>`<button class="${k===st.tab?'on':''}" onclick="ir('${k}')" aria-label="${n}"><svg viewBox="0 0 24 24">${ICO[k]}</svg>${n}</button>`).join('');
 }
-function ir(t){st.tab=t;if(t!=='lanc')st.filtro='';render();scrollTo(0,0)}
+function ir(t){st.tab=t;if(t!=='lanc')st.filtro='';render();const m=$('#main');if(m)m.scrollTop=0}
 function mudaMes(n){st.mes=addM(st.mes,n);render()}
-addEventListener('scroll',()=>$('#hd').classList.toggle('stuck',scrollY>6),{passive:true});
+$('#main').addEventListener('scroll',function(){$('#hd').classList.toggle('stuck',this.scrollTop>6)},{passive:true});
 let tt;function toast(m){const e=$('#toast');e.textContent=m;e.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>e.classList.remove('on'),2600)}
 function abrir(h){$('#sheet').innerHTML='<div class="handle"></div>'+h;$('#ov').classList.add('on')}
 function fechar(){$('#ov').classList.remove('on')}

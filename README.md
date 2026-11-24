@@ -117,6 +117,11 @@ parar de mexer neles. O banco demora a refletir uma mudança de
 fechamento, e sem isso a correção era desfeita na sincronização seguinte.
 Dá para devolver o controle ao banco na mesma tela.
 
+A tela é uma coluna da altura da janela, com cabeçalho e barra de abas
+presos nas pontas e só o miolo rolando. Instalado como aplicativo, o
+Android nem sempre entrega um viewport do tamanho da janela, e um layout
+preso ao viewport aparecia cortado em cima e embaixo.
+
 Regras de categoria do próprio usuário vêm antes das do app e ficam no
 aparelho: um Pix para uma pessoa pode ser a mensalidade da faculdade, e
 isso ninguém adivinha pela descrição. A regra casa por texto, ignorando
