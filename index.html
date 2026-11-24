@@ -195,7 +195,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v42 — 24/11';
+const VERSAO='v43 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -581,7 +581,12 @@ cartoes(){
       h+=`<div class="row" style="cursor:default"><span class="mid"><span class="t1">Fatura de ${curtoMes(mesVenc(c,F))} ${tg}</span><span class="t2">fecha ${fechaData(c,F)}, vence ${venceData(c,F)}${paga(c,F)&&pagaEm(c,F)?' · paga em '+dataBR(pagaEm(c,F)):''}</span></span>
       <span class="end vmid">${money(f[F])}</span>${F<=A||pg?`<button class="btn ${pg?'g':''} s" onclick="pagarFatura('${c.id}','${F}')">${pg?'Desfazer':'Paguei'}</button>`
        :''}<button class="btn g s" onclick="formDatasFat('${c.id}','${F}')" aria-label="Datas desta fatura">datas</button></div>`});
-    if((c.pula||[]).length)h+=`<div style="display:block;padding:10px 16px" class="lbl">Faturas marcadas como inexistentes: ${c.pula.slice().sort().map(F=>`${curtoMes(mesVenc(c,F))} <a onclick="despulaFatura('${c.id}','${F}')">desfazer</a>`).join(' · ')}</div>`;
+    // a fatura removida sai da lista: sem uma linha própria não há como voltar
+    (c.pula||[]).slice().sort().forEach(F=>{
+      h+=`<div class="row" style="cursor:default;opacity:.72"><span class="mid">
+        <span class="t1">Fatura de ${curtoMes(mesVenc(c,F))} <span class="tag">não existe</span></span>
+        <span class="t2">fecharia ${fechaData(c,F)} · as compras dela estão em ${curtoMes(mesVenc(c,proxFat(c,addM(F,1))))}</span></span>
+        <button class="btn g s" onclick="despulaFatura('${c.id}','${F}')">Trazer de volta</button></div>`});
     h+=`</div></div>`;
   });
   h+=`<div class="acts"><button class="btn g" onclick="formCartao()">Adicionar cartão</button></div>
