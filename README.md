@@ -101,6 +101,12 @@ investido vai ficar e avisa quais posições suas não casaram com nenhuma
 do banco — é assim que se percebe que a mesma aplicação está prestes a
 entrar duas vezes.
 
+No extrato de um cartão vêm, junto das compras, o pagamento da própria
+fatura, amortizações e ajustes. Cada um deles carrega o valor da fatura
+inteira, então entram como se fossem a maior compra do mês e dobram o
+que já estava lá. São reconhecidos e chegam desmarcados; os que já
+entraram antes disso aparecem na tela de cartões para apagar.
+
 Corrigir à mão o limite ou as datas de um cartão faz a sincronização
 parar de mexer neles. O banco demora a refletir uma mudança de
 fechamento, e sem isso a correção era desfeita na sincronização seguinte.

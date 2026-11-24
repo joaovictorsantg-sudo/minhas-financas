@@ -195,7 +195,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v38 — 24/11';
+const VERSAO='v39 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -434,6 +434,8 @@ const totalContas=()=>r2(cfg.contas.reduce((s,c)=>s+saldoConta(c.id),0));
 // lançamento cujo destino sumiu: zerar a configuração apaga as contas e
 // deixa os lançamentos apontando para um id que não existe mais
 const orfaos=()=>todos().filter(t=>!conta(t.pg)&&!cartao(t.pg));
+// pagamento da fatura lançado como compra: entrou antes do app saber separar
+const pagtosNoCartao=()=>todos().filter(t=>t.t==='d'&&cartao(t.pg)&&natureza(t.desc)==='fatura');
 const valAtivo=a=>a.rv?r2((+a.qtd||0)*(+a.cot||0)):r2(+a.atual||0);
 function custoAtivo(a){
   if(a.rv)return r2((+a.qtd||0)*(+a.pm||0));
@@ -548,6 +550,8 @@ lanc(){
 },
 cartoes(){
   let h='';
+  const pag=pagtosNoCartao();
+  if(pag.length)h+=`<div class="note" style="border-left-color:var(--bad)"><b>${pag.length} pagamento${pag.length===1?'':'s'} de fatura lançado${pag.length===1?'':'s'} como compra</b>Somam ${brl(r2(pag.reduce((a,t)=>a+(+t.v||0),0)))} e estão inflando as faturas. <a onclick="formPagtos()">Ver e apagar</a></div>`;
   if(!cfg.cartoes.length)return `<div class="grp"><div class="blank">Nenhum cartão de crédito cadastrado.<div style="margin-top:16px"><button class="btn s" onclick="formCartao()">Adicionar cartão</button></div></div></div>`;
   cfg.cartoes.forEach(c=>{
     const f=faturas(c),A=fatAberta(c),u=usado(c),livre=c.limite-u;
@@ -939,7 +943,10 @@ function ehVoce(desc){
 function natureza(desc){
   const d=String(desc||'');
   if(ehVoce(d))return 'transferencia';
+  // num cartão, o pagamento da própria fatura chega junto com as compras e
+  // tem o valor da fatura inteira: entrar como gasto dobraria o mês
   if(/pagamento.*fatura|fatura.*cart|fatura picpay|fatura inter/i.test(d))return 'fatura';
+  if(/pagamento\s*(on\s*line|efetuado|recebido)|\bpagto\b|amortiza[çc]|ajuste a cr[ée]dito|\bvl fat\b|\bpg ent\b|\bvalor pst\b|estorno/i.test(d))return 'fatura';
   if(/aplica[çc][aã]o|resgate|resgatad|\bcdb\b|tesouro|nota bov|d[ée]bito b3|porq obj|cofrinho/i.test(d))return 'investimento';
   if(/cr[ée]dito liberado|pix no cr[ée]dito/i.test(d))return 'credito';
   return '';
@@ -1347,6 +1354,26 @@ function aplicaOrcAuto(){
   salvarCfg();fechar();render();
   toast('Orçamento definido em '+n+(n===1?' categoria':' categorias'));
 }
+function formPagtos(){
+  const o=pagtosNoCartao(); if(!o.length)return toast('Nada para limpar');
+  const soma=r2(o.reduce((a,t)=>a+(+t.v||0),0));
+  abrir(cab('Pagamentos lançados como compra')+
+  `<p class="hint" style="padding-left:0">${o.length} lançamento${o.length===1?'':'s'} ${o.length===1?'parece':'parecem'} pagamento ou ajuste da fatura, não compra. Somam ${brl(soma)} e estão inflando suas faturas.</p>
+   <div class="grp"><div class="rows">`+
+   o.slice(0,30).sort((a,b)=>a.data.localeCompare(b.data)).map(t=>
+   `<div class="row" style="cursor:default"><span class="mid"><span class="t1">${esc(t.desc||'—')}</span>
+    <span class="t2">${dataBR(t.data)} · ${esc((cartao(t.pg)||{}).nome||'')}</span></span><span class="end vmid">${brl(t.v)}</span></div>`).join('')+
+   `</div></div>
+   ${o.length>30?`<p class="hint" style="padding-left:0">…e mais ${o.length-30}.</p>`:''}
+   <p class="hint" style="padding-left:0">Compras de verdade não entram nessa lista. Se alguma aí for compra, apague as outras e lance essa à mão.</p>
+   <div class="acts"><button class="btn g" onclick="fechar()">Cancelar</button>
+   <button class="btn d" onclick="apagaPagtos()">Apagar ${o.length}</button></div>`);
+}
+function apagaPagtos(){
+  const ids=new Set(pagtosNoCartao().map(t=>t.id)); if(!ids.size)return;
+  Object.keys(meses).forEach(k=>{meses[k]=meses[k].filter(t=>!ids.has(t.id))});
+  cache();fechar();render();toast(ids.size+(ids.size===1?' lançamento apagado':' lançamentos apagados'));
+}
 function formOrfaos(){
   const o=orfaos(); if(!o.length)return;
   const ent=o.filter(t=>t.t==='r').length;
@@ -1716,7 +1743,7 @@ async function sincronizar(auto){
       catch(e){ erros.push({b:(b.nome||'Banco')+' · '+c.nome,m:msgErro(e.message)}); continue }
       for(const l of lancs){
         if(!l.data||!l.valor)continue;
-        itens.push({data:l.data,v:l.valor,desc:limpaDesc(l.descricao),fit:'p:'+l.id,pg});
+        itens.push({data:l.data,v:l.valor,desc:limpaDesc(l.descricao),fit:'p:'+l.id,pg,tp:l.tipo||''});
       }
     }
   }
@@ -1734,7 +1761,9 @@ async function sincronizar(auto){
   const jaTemH=new Set(antigos.map(semOrigemLanc));
   const montado={pg:(itens[0]||{}).pg||(cfg.contas[0]||{}).id,inv:false,saldo:null,ajusta:false,
     sync:true,achadas,invs:invsAg,erros,acertar:true,itens:itens.map(t=>{
-    const k=chaveTx(t), nat=natureza(t.desc);
+    // CREDIT num cartão é dinheiro entrando nele: pagamento ou estorno, nunca compra
+    const k=chaveTx(t);
+    const nat=natureza(t.desc)||(cartao(t.pg)&&String(t.tp||'').toUpperCase()==='CREDIT'?'fatura':'');
     const dup=jaTem.has(k)||jaTemH.has(semOrigem(t));
     return {...t,k,dup,nat,quita:null,met:'',usar:!dup&&!nat,cat:categorizar(t.desc,t.v>0)};
   })};
