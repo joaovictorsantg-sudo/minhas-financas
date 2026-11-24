@@ -150,9 +150,11 @@ nav button.on{color:var(--acc)}
    ela existe, um mínimo decente quando não existe. */
 @media (display-mode: standalone), (display-mode: fullscreen){
   header{padding-top:calc(12px + max(env(safe-area-inset-top,0px), 28px))}
-  nav{padding-bottom:calc(10px + max(env(safe-area-inset-bottom,0px), 14px))}
-  .fab{bottom:calc(86px + max(env(safe-area-inset-bottom,0px), 14px))}
-  .toast{bottom:calc(158px + max(env(safe-area-inset-bottom,0px), 14px))}
+  /* barra de três botões do Android tem 48px; a de gestos, menos. max() usa a
+     medida do sistema quando ela vem, e cobre o caso pior quando vem zero */
+  nav{padding-bottom:calc(10px + max(env(safe-area-inset-bottom,0px), 48px))}
+  .fab{bottom:calc(86px + max(env(safe-area-inset-bottom,0px), 48px))}
+  .toast{bottom:calc(158px + max(env(safe-area-inset-bottom,0px), 48px))}
 }
 
 /* painel deslizante */
@@ -208,7 +210,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v48 — 24/11';
+const VERSAO='v49 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
