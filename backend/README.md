@@ -18,6 +18,22 @@ O app chama este worker, o worker fala com a Pluggy.
 A API Key da Pluggy vale duas horas e fica só na memória do worker,
 renovada sozinha. Nenhuma rota devolve número de conta ou documento.
 
+## Conectar banco de graça
+
+O plano pago da Pluggy começa em R$ 2.500 por mês, mas para ler **as
+próprias** contas existe o **Meu Pluggy**, gratuito, com até cinco
+conexões do mesmo titular.
+
+1. Em **meu.pluggy.ai**, crie a conta com o mesmo e-mail do dashboard e
+   conecte seus bancos ali.
+2. No app, em *Ajustes → Sincronização → Conectar banco*, escolha no
+   widget o conector **MeuPluggy** — não o seu banco, nem o Sandbox — e
+   entre com a conta do Meu Pluggy.
+3. Cada banco conectado no Meu Pluggy vira um item legível pela API.
+
+Se a API responder com lista vazia, faltou vincular a conta nova à sua
+aplicação no dashboard.
+
 ## Publicar
 
 Dá para fazer inteiro pelo navegador, sem instalar nada.
