@@ -195,7 +195,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v24 — 24/11';
+const VERSAO='v25 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1096,6 +1096,61 @@ function inverter(){imp.inv=!imp.inv;
   formImportar();toast(imp.inv?'Sinais invertidos':'Sinais como vieram')}
 function alterna(i){imp.itens[i].usar=!imp.itens[i].usar;formImportar()}
 function mudaCat(i,v){imp.itens[i].cat=v}
+function mapeia(pid,pg){
+  const a=(imp.achadas||[]).find(x=>x.pid===pid); if(!a)return;
+  a.pg=pg;
+  const b=cfg.bancos.find(x=>x.id===a.banco);
+  if(b){b.mapa=b.mapa||{};if(pg)b.mapa[pid]=pg;else delete b.mapa[pid];salvarCfg()}
+  formImportar();
+}
+function blocoContas(){
+  const as=imp.achadas||[]; if(!as.length)return '';
+  const faltam=as.filter(a=>!a.pg).length;
+  let h=`<h4 style="margin-top:18px">Contas no banco</h4>`;
+  if(faltam)h+=`<div class="note" style="border-left-color:var(--warn)"><b>${faltam} sem destino no app</b>Aponte abaixo para onde vão. Os lançamentos delas chegam na próxima sincronização.</div>`;
+  as.forEach(a=>{
+    const alvos=a.tipo==='CREDIT'?cfg.cartoes:cfg.contas;
+    h+=`<div class="ilin" style="align-items:center">
+      <div class="imid"><div class="t1">${esc(a.marca||a.nome)}</div>
+      <div class="t2">${a.tipo==='CREDIT'?'cartão':'conta'}${a.saldo!=null?' · '+brl(Math.abs(a.saldo)):''}${a.limite?' · limite '+brl(a.limite):''}</div></div>
+      <select onchange="mapeia('${a.pid}',this.value)" style="width:auto;max-width:48%;font-size:13px;padding:7px 8px">
+        <option value="">— escolher —</option>
+        ${alvos.map(x=>`<option value="${x.id}" ${a.pg===x.id?'selected':''}>${x.emoji||'💳'} ${esc(x.nome)}</option>`).join('')}
+      </select></div>`;
+  });
+  h+=`<div class="ilin" style="border-bottom:0" onclick="imp.acertar=!imp.acertar;formImportar()">
+    <button class="ick" style="${imp.acertar?'':'background:none;border-color:var(--line2)'}">${imp.acertar?'✓':''}</button>
+    <div class="imid"><div class="t1">Trazer saldos, limite e datas do banco</div>
+    <div class="t2">Saldo das contas, limite do cartão, dias de fechamento e vencimento, e o valor da fatura aberta.</div></div></div>`;
+  return h;
+}
+// aplica o que o banco diz sobre contas e cartões
+function aplicaContas(){
+  let n=0;
+  (imp.achadas||[]).forEach(a=>{
+    if(!a.pg)return;
+    if(a.tipo==='CREDIT'){
+      const c=cartao(a.pg); if(!c)return;
+      if(a.limite>0)c.limite=r2(a.limite);
+      const dF=a.fecha&&/^\d{4}-\d{2}-\d{2}/.test(a.fecha)?+a.fecha.slice(8,10):0;
+      const dV=a.vence&&/^\d{4}-\d{2}-\d{2}/.test(a.vence)?+a.vence.slice(8,10):0;
+      if(dF>=1&&dF<=31)c.fecha=dF;
+      if(dV>=1&&dV<=31)c.vence=dV;
+      if(a.saldo!=null){ // fatura aberta: completa a diferença, como no acerto manual
+        const F=fatAberta(c), atual=r2(faturas(c)[F]||0), alvo=r2(Math.abs(a.saldo));
+        c.aberturas=c.aberturas||{};
+        c.aberturas[F]=r2((+c.aberturas[F]||0)+(alvo-atual));
+        Object.keys(c.aberturas).forEach(K=>{if(Math.abs(c.aberturas[K])<0.005)delete c.aberturas[K]});
+      }
+      n++;
+    }else{
+      const k=conta(a.pg); if(!k||a.saldo==null)return;
+      k.saldo=r2((+k.saldo||0)+(r2(a.saldo)-saldoConta(a.pg)));
+      n++;
+    }
+  });
+  return n;
+}
 function formImportar(){
   const ehCartao=!!cartao(imp.pg);
   const marcados=imp.itens.filter(t=>t.usar&&!(cartao(pgDe(t))&&vImp(t)>0));
@@ -1110,6 +1165,7 @@ function formImportar(){
   (porLinha?`<p class="hint" style="padding-left:0">Cada lançamento já vem com a conta de origem.</p>`
    :`<label>Esses lançamentos são de</label><select id="ip_pg" onchange="trocaDestino()">${opts.map(o=>`<option value="${o.id}" ${imp.pg===o.id?'selected':''}>${o.n}</option>`).join('')}</select>`)+
   `<p class="hint" style="padding-left:0">${imp.itens.length} encontrados${dups?', '+dups+' já estavam lançados':''}${nats?', '+nats+' desmarcados por serem transferência entre suas contas':''}. Marque ou desmarque como quiser.</p>
+  ${imp.sync?blocoContas():''}
   ${imp.pdf?`<div class="note" style="border-left-color:var(--warn)"><b>Fatura em PDF</b>${imp.venc?'Vence em '+dataBR(imp.venc)+'/'+imp.venc.slice(0,4)+'. ':''}${imp.total?'A fatura soma '+brl(imp.total)+'. ':''}Tudo vai para a fatura de ${imp.fat?curtoMes(mesVenc(cartao(imp.pg),imp.fat)):'destino'}, mesmo o que foi comprado antes. Se você já pagou essa fatura, marque como paga depois em Cartões.</div>`:''}
   <div class="trio" style="grid-template-columns:1fr 1fr;margin-top:4px">
     <div><span class="lbl">Entrando</span><b class="up">${ent.length} ${ent.length===1?'entrada':'entradas'}, ${brl(somaE)}</b></div>
@@ -1160,7 +1216,10 @@ function confirmarImport(){
     const c=conta(imp.pg);
     if(c){c.saldo=r2((+c.saldo||0)+(imp.saldo-saldoConta(imp.pg)));msg+=', saldo acertado'}
   }
-  if(imp.sync)cfg.bancos.forEach(b=>{b.desde=hoje()});
+  if(imp.sync){
+    if(imp.acertar){const n=aplicaContas();if(n)msg+=', '+n+(n===1?' conta acertada':' contas acertadas')}
+    cfg.bancos.forEach(b=>{b.desde=hoje()});
+  }
   cache();imp=null;fechar();render();
   toast(msg);
 }
@@ -1384,7 +1443,7 @@ async function sincronizar(auto){
   if(sincronizando)return;
   sincronizando=true;
   if(!auto)toast('Sincronizando…');
-  const itens=[], mapa={};
+  const itens=[], achadas=[];
   let erro='';
   for(const b of cfg.bancos){
     let contas;
@@ -1392,8 +1451,9 @@ async function sincronizar(auto){
     catch(e){ erro=e.message; continue }
     for(const c of contas){
       const pg=destinoPluggy(b,c);
-      if(!pg)continue; // sem destino conhecido: o usuário resolve no mapeamento
-      mapa[c.id]={pg,conta:c,banco:b};
+      achadas.push({pid:c.id,banco:b.id,nome:c.nome,marca:c.banco,tipo:c.tipo,
+        saldo:c.saldo,limite:c.limite,fecha:c.fecha,vence:c.vence,pg});
+      if(!pg)continue; // sem destino: aparece na revisão para o usuário apontar
       let lancs=[];
       const desde=b.desde||addM(mk(hoje()),-3)+'-01';
       try{ lancs=(await wk('/lancamentos',{accountId:c.id,desde})).lancamentos||[] }
@@ -1406,16 +1466,18 @@ async function sincronizar(auto){
   }
   cfg.syncTs=Date.now();cache();
   sincronizando=false;
-  if(!itens.length){
+  const semDestino=achadas.filter(a=>!a.pg).length;
+  if(!itens.length&&!semDestino){
     if(erro)return auto?null:toast('Falha ao sincronizar: '+curto(erro));
     return auto?null:toast('Nada novo para trazer');
   }
   itens.sort((a,b)=>a.data.localeCompare(b.data));
-  const montado={pg:itens[0].pg,inv:false,saldo:null,ajusta:false,sync:true,mapa,itens:itens.map(t=>{
+  const montado={pg:(itens[0]||{}).pg||(cfg.contas[0]||{}).id,inv:false,saldo:null,ajusta:false,
+    sync:true,achadas,acertar:true,itens:itens.map(t=>{
     const k=chaveTx(t), dup=todos().some(x=>x.k===k), nat=natureza(t.desc);
     return {...t,k,dup,nat,quita:null,met:'',usar:!dup&&!nat,cat:categorizar(t.desc,t.v>0)};
   })};
-  const novos=montado.itens.filter(t=>t.usar).length;
+  const novos=montado.itens.filter(t=>t.usar).length+semDestino;
   if(auto){
     if(!novos){pend=null;render();return}      // só repetidos: nada a fazer
     if(cfg.syncDireto){imp=montado;confirmarImport();return}
