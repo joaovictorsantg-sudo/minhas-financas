@@ -191,7 +191,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v12 — 24/11';
+const VERSAO='v13 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -468,7 +468,7 @@ inicio(){
   <span class="vbig ${patrimonio()<0?'down':''}">${money(patrimonio())}</span>
   <div class="trio"><div><span class="lbl">Em conta</span><b>${money(totalContas())}</b></div>
   <div><span class="lbl">Investido</span><b class="up">${money(totalInvest())}</b></div>
-  <div><span class="lbl">Cartões</span><b class="down">−${money(totalCartoes())}</b></div></div></div>`;
+  <div><span class="lbl">Cartões</span><b class="${totalCartoes()>0?'down':''}">${totalCartoes()>0?'−':''}${money(totalCartoes())}</b></div></div></div>`;
 
   h+=`<h2>Contas<span class="sp"></span><a onclick="abrirAjustes()">ajustar saldo</a></h2><div class="grp"><div class="rows">`;
   cfg.contas.forEach(c=>{const s=saldoConta(c.id);
@@ -1140,10 +1140,19 @@ function fazReset(k){
 
 /* ---------- ajustes ---------- */
 let rasc=null;
-function abrirAjustes(){rasc=clone(cfg);formAjustes()}
+function abrirAjustes(){
+  rasc=clone(cfg);
+  // o campo mostra o saldo de hoje; o ponto de partida é recalculado a partir dele
+  rasc._visto={}; cfg.contas.forEach(c=>{rasc._visto[c.id]=saldoConta(c.id)});
+  formAjustes();
+}
 function lerAjustes(){
   rasc.salario=r2(num(val('j_sal'))||0);rasc.metaInvest=r2(num(val('j_mi'))||0);rasc.salarioQuando=val('j_sq')||'pu';
-  rasc.contas.forEach((c,i)=>{c.saldo=r2(num(val('t_s'+i))||0)});
+  rasc.contas.forEach((c,i)=>{
+    const novo=r2(num(val('t_s'+i))||0), visto=rasc._visto?rasc._visto[c.id]:undefined;
+    if(visto===undefined){c.saldo=novo}
+    else if(novo!==visto){c.saldo=r2((+c.saldo||0)+(novo-visto));rasc._visto[c.id]=novo}
+  });
   rasc.cartoes.forEach((c,i)=>{c.limite=r2(num(val('c_l'+i))||0);
     c.fecha=Math.min(31,Math.max(1,parseInt(val('c_f'+i))||1));c.vence=Math.min(31,Math.max(1,parseInt(val('c_v'+i))||1));
     c.conta=val('c_ct'+i)||c.conta;
@@ -1158,8 +1167,9 @@ function formAjustes(){
       .concat(Array.from({length:28},(_,i)=>[String(i+1),'Todo dia '+(i+1)]))
       .map(([v,n])=>`<option value="${v}" ${String(rasc.salarioQuando||'pu')===v?'selected':''}>${n}</option>`).join('')}</select>
   <p class="hint" style="padding-left:0">Em ${nomeMes(st.mes)} isso cai em ${dataBR(dataSalario(st.mes))}.</p>
-  <h4>Saldo das contas</h4><p class="hint" style="padding-left:0">Ponto de partida. O app soma e subtrai os lançamentos a partir daqui.</p>`;
-  rasc.contas.forEach((c,i)=>{h+=`<label>${c.emoji} ${esc(c.nome)}</label><input id="t_s${i}" inputmode="decimal" value="${n2(c.saldo)}">`});
+  <h4>Saldo de hoje</h4><p class="hint" style="padding-left:0">Quanto tem em cada conta agora. Se não bater, corrija aqui que o app acerta o histórico sozinho.</p>`;
+  rasc.contas.forEach((c,i)=>{const v=rasc._visto&&rasc._visto[c.id]!==undefined?rasc._visto[c.id]:c.saldo;
+    h+=`<label>${c.emoji} ${esc(c.nome)}</label><input id="t_s${i}" inputmode="decimal" value="${n2(v)}">`});
   h+=`<h4>Cartões</h4>`;
   rasc.cartoes.forEach((c,i)=>{h+=`<div class="panel" style="--edge:${c.cor};margin-top:10px"><b style="font-weight:600">${esc(c.nome)}</b>
     <div class="three"><div><label>Limite</label><input id="c_l${i}" inputmode="decimal" value="${n2(c.limite)}"></div>
@@ -1189,7 +1199,7 @@ function formAjustes(){
 function editarCartao(id){lerAjustes();cfg=rasc;rasc=null;salvarCfg();formCartao(id)}
 function addCat(){lerAjustes();rasc.categorias.push({id:uid(),emoji:'📦',nome:'Nova',orc:0});formAjustes();const s=$('#sheet');s.scrollTop=s.scrollHeight}
 function remCat(i){lerAjustes();rasc.categorias.splice(i,1);formAjustes()}
-function salvarAjustes(){lerAjustes();cfg=rasc;rasc=null;salvarCfg();fechar();toast('Ajustes salvos')}
+function salvarAjustes(){lerAjustes();delete rasc._visto;cfg=rasc;rasc=null;salvarCfg();fechar();toast('Ajustes salvos')}
 
 iniciar();
 </script>
