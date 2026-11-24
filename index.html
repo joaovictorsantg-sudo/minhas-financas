@@ -195,7 +195,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v23 — 24/11';
+const VERSAO='v24 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -219,7 +219,7 @@ const r2=v=>Math.round(v*100)/100;
 const r4=v=>Math.round(v*10000)/10000;
 
 const DEF={
-  salario:0, metaInvest:0, cotAt:'', cotTs:0, salarioQuando:'pu', nome:'', wkUrl:'', bancos:[],
+  salario:0, metaInvest:0, cotAt:'', cotTs:0, salarioQuando:'pu', nome:'', wkUrl:'', bancos:[], syncAuto:true, syncDireto:false, syncTs:0,
   contas:[
     {id:'conta',emoji:'🏦',nome:'Conta',saldo:0},
     {id:'dinheiro',emoji:'💵',nome:'Dinheiro',saldo:0}
@@ -361,9 +361,11 @@ function iniciar(){
   }
   const velho=!cfg.cotTs||(Date.now()-cfg.cotTs)>15*60*1000;
   if(velho)buscarCotacoes(true);
+  syncAoAbrir();
   addEventListener('visibilitychange',()=>{
     if(document.visibilityState!=='visible')return;
     if(!cfg.cotTs||(Date.now()-cfg.cotTs)>15*60*1000)buscarCotacoes(true);
+    syncAoAbrir();
   });
 }
 
@@ -468,6 +470,9 @@ inicio(){
   <div><span class="lbl">Investiu</span><b>${money(r.apo)}</b></div></div>
   ${salPend?`<div class="acts"><button class="btn g" onclick="lancarSalario()">Registrar salário de ${brl(cfg.salario)}</button></div>`:''}</div>`;
 
+  if(pend){const n=pend.itens.filter(t=>t.usar).length;
+    h+=`<div class="note" style="border-left-color:var(--up)"><b>${n} ${n===1?'lançamento novo':'lançamentos novos'} do banco</b>Chegaram na última sincronização e esperam sua revisão.
+    <div class="acts"><button class="btn s" onclick="revisarPendente()">Revisar agora</button></div></div>`}
   const est=cfg.cartoes.filter(c=>usado(c)>c.limite);
   if(est.length)h+=`<div class="note"><b>Limite estourado</b>${est.map(c=>esc(c.nome)+' tem '+brl(usado(c))+' comprometidos de um limite de '+brl(c.limite)+'.').join(' ')} Esse cartão não passa em compra nova até a fatura ser paga.</div>`;
 
@@ -1012,7 +1017,7 @@ function parseCSV(txt){
   }
   return out;
 }
-let imp=null;
+let imp=null, sincronizando=false;
 function lerExtrato(inp){
   const f=inp.files&&inp.files[0]; if(!f)return;
   inp.value='';
@@ -1373,9 +1378,12 @@ function destinoPluggy(b,c){
   const achou=alvo.find(x=>x.nome.length>=3&&nome.includes(semAcento(x.nome)));
   return achou?achou.id:'';
 }
-async function sincronizar(){
-  if(!cfg.bancos.length)return toast('Nenhum banco conectado');
-  toast('Sincronizando…');
+let pend=null; // resultado de uma sincronização automática, esperando revisão
+async function sincronizar(auto){
+  if(!cfg.bancos.length)return auto?null:toast('Nenhum banco conectado');
+  if(sincronizando)return;
+  sincronizando=true;
+  if(!auto)toast('Sincronizando…');
   const itens=[], mapa={};
   let erro='';
   for(const b of cfg.bancos){
@@ -1396,16 +1404,33 @@ async function sincronizar(){
       }
     }
   }
+  cfg.syncTs=Date.now();cache();
+  sincronizando=false;
   if(!itens.length){
-    if(erro)return toast('Falha ao sincronizar: '+erro);
-    return toast('Nada novo para trazer');
+    if(erro)return auto?null:toast('Falha ao sincronizar: '+curto(erro));
+    return auto?null:toast('Nada novo para trazer');
   }
   itens.sort((a,b)=>a.data.localeCompare(b.data));
-  imp={pg:itens[0].pg,inv:false,saldo:null,ajusta:false,sync:true,mapa,itens:itens.map(t=>{
+  const montado={pg:itens[0].pg,inv:false,saldo:null,ajusta:false,sync:true,mapa,itens:itens.map(t=>{
     const k=chaveTx(t), dup=todos().some(x=>x.k===k), nat=natureza(t.desc);
     return {...t,k,dup,nat,quita:null,met:'',usar:!dup&&!nat,cat:categorizar(t.desc,t.v>0)};
   })};
-  fechar();formImportar();
+  const novos=montado.itens.filter(t=>t.usar).length;
+  if(auto){
+    if(!novos){pend=null;render();return}      // só repetidos: nada a fazer
+    if(cfg.syncDireto){imp=montado;confirmarImport();return}
+    pend=montado;render();                      // avisa na tela inicial
+    return;
+  }
+  pend=null;imp=montado;fechar();formImportar();
+}
+const curto=m=>String(m||'').slice(0,90);
+function revisarPendente(){if(!pend)return;imp=pend;pend=null;formImportar()}
+async function syncAoAbrir(){
+  if(!cfg.syncAuto||!temSync()||!cfg.bancos.length)return;
+  if(!navigator.onLine)return;
+  if(cfg.syncTs&&Date.now()-cfg.syncTs<4*60*60*1000)return; // no máximo de 4 em 4 horas
+  try{await sincronizar(true)}catch(e){sincronizando=false}
 }
 function formSync(){
   abrir(cab('Sincronização')+
@@ -1420,6 +1445,15 @@ function formSync(){
      <button class="btn g s" onclick="esqueceBanco('${b.id}')">Remover</button></div>`).join('')+`</div></div>`
    :`<p class="hint" style="padding-left:0">Nenhum ainda.</p>`)+
   `<p class="hint" style="padding-left:0">No plano gratuito, conecte seus bancos antes em <b>meu.pluggy.ai</b>. Aqui no widget escolha o conector <b>MeuPluggy</b> — não o seu banco, nem o Sandbox — e entre com a conta do Meu Pluggy.</p>
+  ${cfg.bancos.length?`<h4>Automático</h4>
+  <div class="ilin" style="border-bottom:0" onclick="cfg.syncAuto=!cfg.syncAuto;salvarCfg();formSync()">
+    <button class="ick" style="${cfg.syncAuto?'':'background:none;border-color:var(--line2)'}">${cfg.syncAuto?'✓':''}</button>
+    <div class="imid"><div class="t1">Sincronizar ao abrir o app</div>
+    <div class="t2">No máximo de 4 em 4 horas. ${cfg.syncTs?'Última vez às '+new Date(cfg.syncTs).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})+'.':''}</div></div></div>
+  <div class="ilin" style="border-bottom:0" onclick="cfg.syncDireto=!cfg.syncDireto;salvarCfg();formSync()">
+    <button class="ick" style="${cfg.syncDireto?'':'background:none;border-color:var(--line2)'}">${cfg.syncDireto?'✓':''}</button>
+    <div class="imid"><div class="t1">Lançar sem revisar</div>
+    <div class="t2">Entra direto, com a categoria adivinhada. Transferência e repetido continuam de fora.</div></div></div>`:''}
   <div class="acts"><button class="btn" onclick="conectarBanco()">Conectar banco</button>
   ${cfg.bancos.length?`<button class="btn g" onclick="sincronizar()">Sincronizar agora</button>`:''}</div>
   <div class="acts fim"><button class="btn g" onclick="abrirAjustes()">Voltar</button></div>`);

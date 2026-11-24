@@ -93,6 +93,14 @@ pela mesma tela de revisão do extrato, com a mesma detecção de
 transferência e de repetidos, então sincronizar duas vezes não duplica
 nada.
 
+A sincronização acontece sozinha ao abrir o app, no máximo de quatro em
+quatro horas, e nunca interrompe: se vier coisa nova, a tela inicial
+avisa e você revisa quando quiser. Navegador não roda app em segundo
+plano de forma confiável, então não existe sincronização de hora em hora
+com o app fechado. Quem preferir pode marcar *Lançar sem revisar*, e aí
+o que chega entra direto com a categoria adivinhada — transferência e
+repetido continuam de fora.
+
 O token fica no `localStorage`, fora do backup, para não viajar junto
 quando você levar seus dados para outro aparelho.
 
