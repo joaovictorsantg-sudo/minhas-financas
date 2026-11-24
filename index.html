@@ -195,7 +195,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v34 — 24/11';
+const VERSAO='v35 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -859,6 +859,10 @@ function categorizar(desc,ehEntrada){
 const limpaDesc=d=>String(d||'').replace(/\s+/g,' ')
   .replace(/^[\s\-–—·|,;:]+|[\s\-–—·|,;:]+$/g,'').slice(0,60)||'Lançamento';
 const chaveTx=t=>t.fit?('f:'+t.fit):('h:'+t.data+'|'+t.v.toFixed(2)+'|'+limpaDesc(t.desc).toLowerCase().slice(0,24));
+// a mesma chave, ignorando o id de origem: reconectar o banco troca todos os
+// ids, e sem isso o histórico inteiro voltaria como se fosse novo
+const semOrigem=t=>'h:'+t.data+'|'+t.v.toFixed(2)+'|'+limpaDesc(t.desc||'').toLowerCase().slice(0,24);
+const semOrigemLanc=t=>semOrigem({data:t.data,v:(t.t==='r'?+t.v:-t.v),desc:t.desc});
 
 function parseOFX(txt){
   const out=[];
@@ -1648,9 +1652,13 @@ async function sincronizar(auto){
     return auto?null:toast('Nada novo para trazer');
   }
   itens.sort((a,b)=>a.data.localeCompare(b.data));
+  const antigos=todos();
+  const jaTem=new Set(antigos.map(x=>x.k));
+  const jaTemH=new Set(antigos.map(semOrigemLanc));
   const montado={pg:(itens[0]||{}).pg||(cfg.contas[0]||{}).id,inv:false,saldo:null,ajusta:false,
     sync:true,achadas,invs:invsAg,erros,acertar:true,itens:itens.map(t=>{
-    const k=chaveTx(t), dup=todos().some(x=>x.k===k), nat=natureza(t.desc);
+    const k=chaveTx(t), nat=natureza(t.desc);
+    const dup=jaTem.has(k)||jaTemH.has(semOrigem(t));
     return {...t,k,dup,nat,quita:null,met:'',usar:!dup&&!nat,cat:categorizar(t.desc,t.v>0)};
   })};
   const novos=montado.itens.filter(t=>t.usar).length+semDestino+invsAg.length;

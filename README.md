@@ -101,6 +101,11 @@ investido vai ficar e avisa quais posições suas não casaram com nenhuma
 do banco — é assim que se percebe que a mesma aplicação está prestes a
 entrar duas vezes.
 
+Repetido é reconhecido pelo id do banco e também pela data, valor e
+descrição. Reconectar um banco gera ids novos para as mesmas transações,
+e só pelo id o histórico inteiro voltaria como novidade. Duas compras
+iguais no mesmo dia que cheguem juntas continuam entrando as duas.
+
 Duas contas do banco não podem apontar para a mesma conta do app: o
 acerto de saldo de uma sobrescreve o da outra, e quem aplicar por último
 decide. Um mapeamento assim já gravado é desfeito na sincronização
