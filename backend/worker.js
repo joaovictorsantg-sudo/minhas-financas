@@ -60,15 +60,17 @@ export default {
         if (!accountId) return json({ erro: 'falta_accountId' }, 400);
         const desde = url.searchParams.get('desde'); // AAAA-MM-DD
         const tudo = [];
-        let pagina = 1;
-        // a API pagina; 500 por vez é o teto e cobre meses de histórico
-        for (;;) {
-          const q = new URLSearchParams({ accountId, pageSize: '500', page: String(pagina) });
-          if (desde) q.set('from', desde);
-          const r = await pluggy(env, `/transactions?${q}`);
+        // v2 pagina por cursor. Nada de page nem pageSize aqui: qualquer um
+        // deles devolve a chamada ao /transactions antigo, que responde 410.
+        let q = '?accountId=' + encodeURIComponent(accountId) +
+                (desde ? '&dateFrom=' + encodeURIComponent(desde) : '');
+        for (let i = 0; i < 20; i++) {
+          const r = await pluggy(env, `/v2/transactions${q}`);
           tudo.push(...(r.results || []).map(lancLimpo));
-          if (!r.results?.length || tudo.length >= (r.total ?? 0) || pagina >= (r.totalPages ?? 1)) break;
-          if (++pagina > 20) break; // trava de segurança
+          if (!r.next) break;
+          // next já vem com os filtros e o cursor; colar como veio.
+          // O cursor é base64 e tem +, / e =: reencodar quebra a próxima página.
+          q = String(r.next).startsWith('?') ? r.next : '?' + String(r.next).replace(/^&/, '');
         }
         return json({ lancamentos: tudo });
       }
