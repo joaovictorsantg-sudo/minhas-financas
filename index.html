@@ -195,7 +195,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v28 — 24/11';
+const VERSAO='v29 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1147,6 +1147,11 @@ function aplicaInvestimentos(){
     cfg.cotAt=p2(d.getDate())+'/'+p2(d.getMonth()+1)+' às '+p2(d.getHours())+':'+p2(d.getMinutes())}
   return n;
 }
+// um banco pode falhar enquanto outro funciona; sem isso a falha passava calada
+function blocoErros(){
+  const es=imp.erros||[]; if(!es.length)return '';
+  return `<div class="note" style="border-left-color:var(--bad)"><b>Não deu para trazer de ${esc(es.map(e=>e.b).join(', '))}</b>${esc(es.map(e=>e.m).join(' · '))}</div>`;
+}
 function blocoInvs(){
   const is=imp.invs||[]; if(!is.length)return '';
   let h=`<h4 style="margin-top:18px">Investimentos no banco</h4>`;
@@ -1231,7 +1236,7 @@ function formImportar(){
   (porLinha?`<p class="hint" style="padding-left:0">Cada lançamento já vem com a conta de origem.</p>`
    :`<label>Esses lançamentos são de</label><select id="ip_pg" onchange="trocaDestino()">${opts.map(o=>`<option value="${o.id}" ${imp.pg===o.id?'selected':''}>${o.n}</option>`).join('')}</select>`)+
   `<p class="hint" style="padding-left:0">${imp.itens.length} encontrados${dups?', '+dups+' já estavam lançados':''}${nats?', '+nats+' desmarcados por serem transferência entre suas contas':''}. Marque ou desmarque como quiser.</p>
-  ${imp.sync?blocoContas()+blocoInvs():''}
+  ${imp.sync?blocoErros()+blocoContas()+blocoInvs():''}
   ${imp.pdf?`<div class="note" style="border-left-color:var(--warn)"><b>Fatura em PDF</b>${imp.venc?'Vence em '+dataBR(imp.venc)+'/'+imp.venc.slice(0,4)+'. ':''}${imp.total?'A fatura soma '+brl(imp.total)+'. ':''}Tudo vai para a fatura de ${imp.fat?curtoMes(mesVenc(cartao(imp.pg),imp.fat)):'destino'}, mesmo o que foi comprado antes. Se você já pagou essa fatura, marque como paga depois em Cartões.</div>`:''}
   <div class="trio" style="grid-template-columns:1fr 1fr;margin-top:4px">
     <div><span class="lbl">Entrando</span><b class="up">${ent.length} ${ent.length===1?'entrada':'entradas'}, ${brl(somaE)}</b></div>
@@ -1515,8 +1520,7 @@ async function sincronizar(auto){
   if(sincronizando)return;
   sincronizando=true;
   if(!auto)toast('Sincronizando…');
-  const itens=[], achadas=[], invs=[];
-  let erro='';
+  const itens=[], achadas=[], invs=[], erros=[];
   for(const b of cfg.bancos){
     try{
       ((await wk('/investimentos',{itemId:b.id})).investimentos||[]).forEach(i=>{
@@ -1526,7 +1530,7 @@ async function sincronizar(auto){
     }catch(e){ /* nem todo banco devolve investimento */ }
     let contas;
     try{ contas=(await wk('/contas',{itemId:b.id})).contas||[] }
-    catch(e){ erro=e.message; continue }
+    catch(e){ erros.push({b:b.nome||'Banco',m:msgErro(e.message)}); continue }
     for(const c of contas){
       const pg=destinoPluggy(b,c);
       achadas.push({pid:c.id,banco:b.id,nome:c.nome,marca:c.banco,tipo:c.tipo,
@@ -1536,7 +1540,7 @@ async function sincronizar(auto){
       // nunca sincronizado: busca o máximo que o Open Finance costuma guardar
       const desde=b.desde||addM(mk(hoje()),-12)+'-01';
       try{ lancs=(await wk('/lancamentos',{accountId:c.id,desde})).lancamentos||[] }
-      catch(e){ erro=e.message; continue }
+      catch(e){ erros.push({b:(b.nome||'Banco')+' · '+c.nome,m:msgErro(e.message)}); continue }
       for(const l of lancs){
         if(!l.data||!l.valor)continue;
         itens.push({data:l.data,v:l.valor,desc:limpaDesc(l.descricao),fit:'p:'+l.id,pg});
@@ -1547,12 +1551,12 @@ async function sincronizar(auto){
   sincronizando=false;
   const semDestino=achadas.filter(a=>!a.pg).length;
   if(!itens.length&&!semDestino&&!invs.length){
-    if(erro)return auto?null:toast('Falha ao sincronizar: '+curto(erro));
+    if(erros.length)return auto?null:toast('Não deu para trazer de '+erros[0].b+': '+erros[0].m);
     return auto?null:toast('Nada novo para trazer');
   }
   itens.sort((a,b)=>a.data.localeCompare(b.data));
   const montado={pg:(itens[0]||{}).pg||(cfg.contas[0]||{}).id,inv:false,saldo:null,ajusta:false,
-    sync:true,achadas,invs,acertar:true,itens:itens.map(t=>{
+    sync:true,achadas,invs,erros,acertar:true,itens:itens.map(t=>{
     const k=chaveTx(t), dup=todos().some(x=>x.k===k), nat=natureza(t.desc);
     return {...t,k,dup,nat,quita:null,met:'',usar:!dup&&!nat,cat:categorizar(t.desc,t.v>0)};
   })};
@@ -1566,6 +1570,18 @@ async function sincronizar(auto){
   pend=null;imp=montado;fechar();formImportar();
 }
 const curto=m=>String(m||'').slice(0,90);
+// os códigos do backend não dizem nada para quem lê a tela
+function msgErro(m){
+  m=String(m||'');
+  if(m==='sem_config')return 'o endereço do backend não está preenchido';
+  if(m==='token_recusado'||/^http_40[13]$/.test(m))return 'o backend recusou o token';
+  if(/^http_5/.test(m))return 'o backend não respondeu';
+  if(/^http_/.test(m))return 'o backend devolveu erro '+m.slice(5);
+  if(/LOGIN_ERROR|INVALID_CREDENTIALS/i.test(m))return 'a conexão com o banco expirou — reconecte em meu.pluggy.ai';
+  if(/UPDATING|OUTDATED/i.test(m))return 'o banco ainda está atualizando os dados — tente de novo em alguns minutos';
+  if(/Failed to fetch|NetworkError/i.test(m))return 'não alcancei o backend';
+  return curto(m);
+}
 function revisarPendente(){if(!pend)return;imp=pend;pend=null;formImportar()}
 async function syncAoAbrir(){
   if(!cfg.syncAuto||!temSync()||!cfg.bancos.length)return;

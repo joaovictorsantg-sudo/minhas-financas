@@ -101,6 +101,11 @@ investido vai ficar e avisa quais posições suas não casaram com nenhuma
 do banco — é assim que se percebe que a mesma aplicação está prestes a
 entrar duas vezes.
 
+Quando um banco falha e outro funciona, a revisão diz qual falhou e por
+quê. Sem isso a falha passava calada: bastava o banco devolver os
+investimentos para a tela abrir como se tudo tivesse vindo, e o extrato
+que faltava só aparecia como ausência.
+
 A sincronização acontece sozinha ao abrir o app, no máximo de quatro em
 quatro horas, e nunca interrompe: se vier coisa nova, a tela inicial
 avisa e você revisa quando quiser. Navegador não roda app em segundo
