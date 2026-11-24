@@ -101,6 +101,11 @@ investido vai ficar e avisa quais posições suas não casaram com nenhuma
 do banco — é assim que se percebe que a mesma aplicação está prestes a
 entrar duas vezes.
 
+Corrigir à mão o limite ou as datas de um cartão faz a sincronização
+parar de mexer neles. O banco demora a refletir uma mudança de
+fechamento, e sem isso a correção era desfeita na sincronização seguinte.
+Dá para devolver o controle ao banco na mesma tela.
+
 O orçamento pode ser calculado a partir da meta de investir: o que sobra
 do salário é repartido entre as categorias na proporção do que já se
 gasta nelas. Gastar menos que o disponível não vira licença para gastar

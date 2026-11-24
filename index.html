@@ -195,7 +195,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v37 — 24/11';
+const VERSAO='v38 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1297,11 +1297,13 @@ function aplicaContas(){
     if(!a.pg)return;
     if(a.tipo==='CREDIT'){
       const c=cartao(a.pg); if(!c)return;
-      if(a.limite>0)c.limite=r2(a.limite);
-      const dF=a.fecha&&/^\d{4}-\d{2}-\d{2}/.test(a.fecha)?+a.fecha.slice(8,10):0;
-      const dV=a.vence&&/^\d{4}-\d{2}-\d{2}/.test(a.vence)?+a.vence.slice(8,10):0;
-      if(dF>=1&&dF<=31)c.fecha=dF;
-      if(dV>=1&&dV<=31)c.vence=dV;
+      if(c.doBanco!==false){ // datas corrigidas à mão mandam mais que as do banco
+        if(a.limite>0)c.limite=r2(a.limite);
+        const dF=a.fecha&&/^\d{4}-\d{2}-\d{2}/.test(a.fecha)?+a.fecha.slice(8,10):0;
+        const dV=a.vence&&/^\d{4}-\d{2}-\d{2}/.test(a.vence)?+a.vence.slice(8,10):0;
+        if(dF>=1&&dF<=31)c.fecha=dF;
+        if(dV>=1&&dV<=31)c.vence=dV;
+      }
       if(a.saldo!=null){ // fatura aberta: completa a diferença, como no acerto manual
         const F=fatAberta(c), atual=r2(faturas(c)[F]||0), alvo=r2(Math.abs(a.saldo));
         c.aberturas=c.aberturas||{};
@@ -1528,17 +1530,27 @@ function formCartao(id){
   <div class="two"><div><label>Fecha dia</label><input id="cc_f" inputmode="numeric" value="${c.fecha}"></div>
   <div><label>Vence dia</label><input id="cc_v" inputmode="numeric" value="${c.vence}"></div></div>
   <p class="hint" style="padding-left:0">Os dois dias estão no app do banco, na tela da fatura.</p>
+  ${id&&cfg.bancos.length?(c.doBanco===false
+    ?`<div class="note" style="border-left-color:var(--up)"><b>Limite e datas são seus</b>A sincronização não mexe mais neles neste cartão. <a onclick="voltaAoBanco('${id}')">Deixar o banco atualizar de novo</a></div>`
+    :`<p class="hint" style="padding-left:0">Hoje a sincronização atualiza limite e datas com o que o banco informa. Se você corrigir algo aqui, ela para de mexer.</p>`):''}
   <label>Pagamento sai de</label><select id="cc_ct">${cfg.contas.map(x=>`<option value="${x.id}" ${x.id===c.conta?'selected':''}>${x.emoji} ${esc(x.nome)}</option>`).join('')}</select>
   <label>Cor</label><select id="cc_cor">${CORES.map(k=>`<option value="${k}" ${c.cor===k?'selected':''}>${k}</option>`).join('')}</select>
   ${id?'':`<label>Fatura em aberto hoje, se já tiver</label><input id="cc_ab" inputmode="decimal" placeholder="0,00">
   <p class="hint" style="padding-left:0">O que você já gastou neste cartão antes de começar a usar o app. Pode deixar vazio.</p>`}
   <div class="acts fim">${id?`<button class="btn d" onclick="delCartao('${id}')">Excluir</button>`:''}<button class="btn" onclick="salvarCartao('${id||''}')">Salvar</button></div>`);
 }
+function voltaAoBanco(id){const c=cartao(id);if(!c)return;delete c.doBanco;salvarCfg();formCartao(id);toast('O banco volta a atualizar este cartão')}
 function salvarCartao(id){
   const nome=(val('cc_n')||'').trim(); if(!nome)return toast('Dê um nome ao cartão');
   const lim=num(val('cc_l')); if(!(lim>0))return toast('Informe o limite');
   const f=Math.min(31,Math.max(1,parseInt(val('cc_f'))||1)), v=Math.min(31,Math.max(1,parseInt(val('cc_v'))||1));
-  if(id){const c=cartao(id);Object.assign(c,{nome,limite:r2(lim),fecha:f,vence:v,conta:val('cc_ct'),cor:val('cc_cor')})}
+  if(id){const c=cartao(id);
+    // quem corrige o fechamento na mão sabe algo que o banco ainda não diz:
+    // a partir daí a sincronização para de sobrescrever esses campos
+    const mudou=(+c.fecha!==f)||(+c.vence!==v)||(r2(+c.limite||0)!==r2(lim));
+    Object.assign(c,{nome,limite:r2(lim),fecha:f,vence:v,conta:val('cc_ct'),cor:val('cc_cor')});
+    if(mudou&&cfg.bancos.length&&c.doBanco!==false){c.doBanco=false;setTimeout(()=>toast('O banco não mexe mais no limite e nas datas deste cartão'),420)}
+  }
   else{
     const c={id:'c_'+uid(),nome,limite:r2(lim),fecha:f,vence:v,conta:val('cc_ct'),cor:val('cc_cor'),aberturas:{}};
     const ab=num(val('cc_ab'));
