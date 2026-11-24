@@ -191,7 +191,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v16 — 24/11';
+const VERSAO='v17 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1191,26 +1191,41 @@ function delCartao(id){
   cfg.cartoes=cfg.cartoes.filter(c=>c.id!==id);salvarCfg();fechar();toast('Cartão removido');
 }
 
+function futurasDe(c,F){ // o que já está comprometido mas cai depois da fatura aberta
+  const f=faturas(c); let t=0;
+  Object.keys(f).forEach(K=>{if(K>F&&!paga(c,K))t+=f[K]});
+  return r2(t);
+}
 function formAcertaFatura(cid){
   const c=cartao(cid); if(!c)return;
-  const F=fatAberta(c), atual=r2(faturas(c)[F]||0), u=usado(c);
-  const lanc=r2(atual-(c.aberturas&&c.aberturas[F]||0));
-  abrir(cab('Acertar a fatura do '+esc(c.nome))+
-  `<p class="hint" style="padding-left:0">Abra o app do ${esc(c.nome)}, veja o valor da fatura aberta e digite aqui. O app completa a diferença.</p>
-  <label>Fatura de ${curtoMes(mesVenc(c,F))}, que fecha ${fechaData(c,F)}</label>
-  <input id="af_v" class="big" inputmode="decimal" value="${n2(atual)}">
-  <p class="hint" style="padding-left:0">Hoje o app tem ${brl(atual)} nessa fatura${lanc>0?', sendo '+brl(lanc)+' de compras lançadas':''}. No total são ${brl(u)} comprometidos de ${brl(c.limite)}.</p>
+  const F=fatAberta(c), aberta=r2(faturas(c)[F]||0), fut=futurasDe(c,F), u=usado(c);
+  abrir(cab('Acertar o '+esc(c.nome))+
+  `<p class="hint" style="padding-left:0">Abra o app do ${esc(c.nome)} e copie os dois números da tela do cartão. O app completa a diferença.</p>
+  <label>Fatura aberta, a de ${curtoMes(mesVenc(c,F))}</label>
+  <input id="af_v" class="big" inputmode="decimal" value="${n2(aberta)}">
+  <label>Limite utilizado, o total</label>
+  <input id="af_u" inputmode="decimal" value="${n2(u)}">
+  <p class="hint" style="padding-left:0">A diferença entre os dois são as parcelas futuras: compras já feitas que ainda não entraram na fatura aberta, mas já ocupam limite. Hoje o app tem ${brl(fut)} assim.</p>
   <div class="acts fim"><button class="btn g" onclick="fechar()">Cancelar</button>
   <button class="btn" onclick="salvaAcerto('${cid}')">Salvar</button></div>`);
 }
 function salvaAcerto(cid){
-  const c=cartao(cid), F=fatAberta(c), novo=num(val('af_v'));
-  if(!(novo>=0))return toast('Valor inválido');
-  const atual=r2(faturas(c)[F]||0);
+  const c=cartao(cid), F=fatAberta(c);
+  const nova=num(val('af_v')), novoU=num(val('af_u'));
+  if(!(nova>=0))return toast('Valor da fatura inválido');
+  if(val('af_u')!==undefined&&!(novoU>=0))return toast('Limite utilizado inválido');
+  if(novoU>=0&&novoU+0.005<nova)return toast('O utilizado não pode ser menor que a fatura aberta');
   c.aberturas=c.aberturas||{};
-  c.aberturas[F]=r2((+c.aberturas[F]||0)+(novo-atual));
-  if(Math.abs(c.aberturas[F])<0.005)delete c.aberturas[F];
-  salvarCfg();fechar();toast('Fatura acertada em '+brl(novo));
+  // fatura aberta: completa a diferença, preservando o que já foi lançado
+  c.aberturas[F]=r2((+c.aberturas[F]||0)+(nova-r2(faturas(c)[F]||0)));
+  // parcelas futuras: o resto do limite utilizado vai para a fatura seguinte
+  if(novoU>=0){
+    const alvo=r2(novoU-nova), prox=addM(F,1);
+    c.aberturas[prox]=r2((+c.aberturas[prox]||0)+(alvo-futurasDe(c,F)));
+  }
+  Object.keys(c.aberturas).forEach(K=>{if(Math.abs(c.aberturas[K])<0.005)delete c.aberturas[K]});
+  salvarCfg();fechar();
+  toast('Cartão acertado: '+brl(usado(c))+' comprometidos');
 }
 
 /* ---------- objetivos ---------- */
