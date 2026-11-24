@@ -53,6 +53,21 @@ confirmar. Escolha no topo se aquele extrato é de uma conta ou de um
 cartão; em cartão, os pagamentos de fatura são ignorados, já que não são
 gastos novos.
 
+### O que o app faz sozinho ao importar
+
+- Descobre se o arquivo é de conta ou de cartão, e de qual banco, pelo
+  próprio conteúdo.
+- Marca o meio de pagamento de cada linha: débito, crédito, Pix, boleto.
+- Reconhece transferência entre contas suas — aplicação e resgate de
+  investimento, crédito liberado, pagamento de fatura — e deixa
+  desmarcada, porque não é gasto nem receita.
+- Quando o extrato da conta traz o pagamento de uma fatura que existe no
+  app, quita essa fatura e devolve o limite, em vez de lançar um gasto
+  solto. O casamento é por valor; não havendo valor igual, pela data de
+  vencimento mais próxima.
+- Em OFX com saldo de fechamento, acerta o saldo da conta para bater com
+  o extrato.
+
 ## Recomeçar
 
 **Ajustes → Recomeçar** tem três opções, da mais branda à mais radical:

@@ -191,7 +191,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v13 — 24/11';
+const VERSAO='v14 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -798,7 +798,7 @@ function parseOFX(txt){
     const v=parseFloat(amt.replace(/\./g,m=>'.').replace(',','.'));
     if(!isFinite(v)||v===0)continue;
     out.push({data:d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8),v,
-      desc:limpaDesc(g('NAME')||g('MEMO')),fit:g('FITID')});
+      desc:limpaDesc(g('NAME')||g('MEMO')),memo:g('MEMO'),fit:g('FITID')});
   }
   return out;
 }
@@ -818,6 +818,34 @@ function natureza(desc){
   return '';
 }
 const ROTULO={fatura:'pagamento de fatura',investimento:'aplicação ou resgate',credito:'crédito liberado'};
+// como a compra foi paga, quando o banco conta
+function metodo(t){
+  const d=(t.memo||'')+' '+(t.desc||'');
+  if(/pix/i.test(d))return 'Pix';
+  if(/compra no d[ée]bito|d[ée]bito em conta|cart[aã]o de d[ée]bito|com saldo/i.test(d))return 'débito';
+  if(/cr[ée]dito debitado|no cr[ée]dito|cart[aã]o de cr[ée]dito/i.test(d))return 'crédito';
+  if(/boleto|t[ií]tulo/i.test(d))return 'boleto';
+  if(/compra realizada/i.test(d))return 'débito';
+  return '';
+}
+// qual cartão a descrição cita
+function cartaoNoTexto(d){
+  const t=String(d||'').toLowerCase();
+  return cfg.cartoes.find(c=>c.nome.length>=3&&t.includes(c.nome.toLowerCase()))||null;
+}
+// qual fatura em aberto esse pagamento quita: valor igual manda, senão a data mais próxima
+function achaFatura(c,data,valor){
+  const f=faturas(c), cands=[];
+  for(const F in f){
+    if(f[F]<=0.004||paga(c,F))continue;
+    const mv=mesVenc(c,F), venc=mv+'-'+p2(Math.min(c.vence,diasNo(mv)));
+    cands.push({F,dias:Math.abs((new Date(venc)-new Date(data))/86400000),dv:Math.abs(f[F]-valor)});
+  }
+  if(!cands.length)return null;
+  cands.sort((a,b)=>((a.dv<0.01?0:1)-(b.dv<0.01?0:1))||a.dias-b.dias);
+  const m=cands[0];
+  return (m.dv<0.01||m.dias<=25)?m.F:null;
+}
 function numBR(x){
   // bancos usam − (U+2212) e – no lugar do hífen, e espaço fino antes do valor
   let t=String(x||'').replace(/[\u2212\u2013\u2014]/g,'-')
@@ -934,9 +962,14 @@ function lerExtrato(inp){
     itens.sort((a,b)=>a.data.localeCompare(b.data));
     const dicas=ehOFX?dicasOFX(txt):{org:pescaBanco(txt),cartao:false,saldo:null};
     imp={pg:destinoProvavel(dicas), inv:false, saldo:dicas.saldo, ajusta:dicas.saldo!=null, itens:itens.map(t=>{
-      const k=chaveTx(t), nat=natureza(t.desc);
-      const dup=todos().some(x=>x.k===k);
-      return {...t,k,dup,nat,usar:!dup&&!nat,cat:categorizar(t.desc,t.v>0)};
+      const k=chaveTx(t), nat=natureza(t.desc), dup=todos().some(x=>x.k===k);
+      let quita=null;
+      if(nat==='fatura'&&t.v<0){
+        const c=cartaoNoTexto((t.memo||'')+' '+t.desc)||(cfg.cartoes.length===1?cfg.cartoes[0]:null);
+        const F=c?achaFatura(c,t.data,Math.abs(t.v)):null;
+        if(c&&F)quita={cid:c.id,F};
+      }
+      return {...t,k,dup,nat,quita,met:metodo(t),usar:!dup&&(!nat||!!quita),cat:categorizar(t.desc,t.v>0)};
     })};
     formImportar();
   }).catch(()=>toast('Não deu para abrir o arquivo'));
@@ -992,9 +1025,9 @@ function formImportar(){
     h+=`<div class="ilin ${t.usar?'':'off'}">
       <button class="ick" onclick="alterna(${i})" aria-label="${t.usar?'Tirar':'Incluir'}">${t.usar?'✓':''}</button>
       <div class="imid"><div class="t1">${esc(t.desc)}</div>
-        <div class="t2">${dataBR(t.data)}${t.dup?' · já lançado':''}${t.nat?' · '+ROTULO[t.nat]:''}${pag&&!t.nat?' · pagamento de fatura':''}</div></div>
+        <div class="t2">${dataBR(t.data)}${t.met?' · '+t.met:''}${t.dup?' · já lançado':''}${t.quita?' · quita a fatura de '+curtoMes(mesVenc(cartao(t.quita.cid),t.quita.F))+' do '+esc(cartao(t.quita.cid).nome):t.nat?' · '+ROTULO[t.nat]:''}${pag&&!t.nat?' · pagamento de fatura':''}</div></div>
       <div class="iend"><div class="vmid ${ent?'up':''}">${ent?'+':'−'}${brl(Math.abs(vv))}</div>
-        ${!ent||!ehCartao?`<select class="icat" onchange="mudaCat(${i},this.value)">${(ent?RECS:cfg.categorias).map(c=>`<option value="${c.id}" ${t.cat===c.id?'selected':''}>${c.emoji} ${esc(c.nome)}</option>`).join('')}</select>`:''}</div></div>`;
+        ${(!ent||!ehCartao)&&!t.quita?`<select class="icat" onchange="mudaCat(${i},this.value)">${(ent?RECS:cfg.categorias).map(c=>`<option value="${c.id}" ${t.cat===c.id?'selected':''}>${c.emoji} ${esc(c.nome)}</option>`).join('')}</select>`:''}</div></div>`;
   });
   h+=`<div class="acts fim"><button class="btn g" onclick="fechar()">Cancelar</button>
   <button class="btn" onclick="confirmarImport()">Importar ${usados}</button></div>`;
@@ -1003,16 +1036,23 @@ function formImportar(){
 function confirmarImport(){
   const ehCartao=!!cartao(imp.pg);
   const porMes={}; let n=0;
+  let quitadas=0;
   imp.itens.filter(t=>t.usar).forEach(t=>{
     const vv=vImp(t), ent=vv>0;
+    if(t.quita){ // marca a fatura como paga, que já desconta da conta
+      const c=cartao(t.quita.cid);
+      if(c&&!paga(c,t.quita.F)){cfg.faturasPagas[pagaKey(c,t.quita.F)]=imp.pg;quitadas++}
+      return;
+    }
     if(ehCartao&&ent)return; // pagamento de fatura não é lançamento
     const tx={id:uid(),t:ent?'r':'d',v:r2(Math.abs(vv)),desc:t.desc,
       cat:t.cat||categorizar(t.desc,ent),pg:imp.pg,data:t.data,k:t.k};
     const k=mk(t.data); (porMes[k]=porMes[k]||[]).push(tx); n++;
   });
-  if(!n){fechar();return toast('Nada marcado para importar')}
+  if(!n&&!quitadas){fechar();return toast('Nada marcado para importar')}
   Object.keys(porMes).forEach(k=>{meses[k]=(meses[k]||[]).concat(porMes[k])});
   let msg=n+(n===1?' lançamento importado':' lançamentos importados');
+  if(quitadas)msg+=', '+quitadas+(quitadas===1?' fatura quitada':' faturas quitadas');
   if(imp.saldo!=null&&imp.ajusta&&!ehCartao){
     const c=conta(imp.pg);
     if(c){c.saldo=r2((+c.saldo||0)+(imp.saldo-saldoConta(imp.pg)));msg+=', saldo acertado'}
