@@ -79,6 +79,25 @@ toa.
 - Em OFX com saldo de fechamento, acerta o saldo da conta para bater com
   o extrato.
 
+## Sincronização bancária
+
+Em **Ajustes → Sincronização**, informando o endereço do backend e o
+token, o app conecta bancos pelo Open Finance e puxa os lançamentos sem
+baixar extrato. O widget da Pluggy vai junto no repositório, em
+`vendor/`, carregado só quando você conecta um banco.
+
+Cada conta da Pluggy é casada automaticamente com uma conta ou cartão do
+app pelo nome, e cada lançamento já chega com o destino certo — conta
+vai para conta, cartão vai para a fatura. O que vem sincronizado passa
+pela mesma tela de revisão do extrato, com a mesma detecção de
+transferência e de repetidos, então sincronizar duas vezes não duplica
+nada.
+
+O token fica no `localStorage`, fora do backup, para não viajar junto
+quando você levar seus dados para outro aparelho.
+
+Como publicar o backend está em [`backend/README.md`](backend/README.md).
+
 ## Recomeçar
 
 **Ajustes → Recomeçar** tem três opções, da mais branda à mais radical:

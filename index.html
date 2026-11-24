@@ -195,7 +195,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v21 — 24/11';
+const VERSAO='v22 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -219,7 +219,7 @@ const r2=v=>Math.round(v*100)/100;
 const r4=v=>Math.round(v*10000)/10000;
 
 const DEF={
-  salario:0, metaInvest:0, cotAt:'', cotTs:0, salarioQuando:'pu', nome:'',
+  salario:0, metaInvest:0, cotAt:'', cotTs:0, salarioQuando:'pu', nome:'', wkUrl:'', bancos:[],
   contas:[
     {id:'conta',emoji:'🏦',nome:'Conta',saldo:0},
     {id:'dinheiro',emoji:'💵',nome:'Dinheiro',saldo:0}
@@ -1084,6 +1084,7 @@ function destinoProvavel({org,cartao}){
   return (lista[0]||cfg.contas[0]||cfg.cartoes[0]||{}).id;
 }
 const vImp=t=>imp.inv?-t.v:t.v;
+const pgDe=t=>t.pg||imp.pg;
 function trocaDestino(){const e=$('#ip_pg');if(e)imp.pg=e.value;formImportar()}
 function inverter(){imp.inv=!imp.inv;
   imp.itens.forEach(t=>{t.cat=categorizar(t.desc,vImp(t)>0)});
@@ -1092,16 +1093,18 @@ function alterna(i){imp.itens[i].usar=!imp.itens[i].usar;formImportar()}
 function mudaCat(i,v){imp.itens[i].cat=v}
 function formImportar(){
   const ehCartao=!!cartao(imp.pg);
-  const marcados=imp.itens.filter(t=>t.usar&&!(ehCartao&&vImp(t)>0));
+  const marcados=imp.itens.filter(t=>t.usar&&!(cartao(pgDe(t))&&vImp(t)>0));
   const usados=marcados.length, dups=imp.itens.filter(t=>t.dup).length;
   const ent=marcados.filter(t=>vImp(t)>0), gas=marcados.filter(t=>vImp(t)<0);
   const somaE=r2(ent.reduce((a,t)=>a+vImp(t),0)), somaG=r2(gas.reduce((a,t)=>a-vImp(t),0));
   const todosPos=imp.itens.length>1&&imp.itens.every(t=>vImp(t)>0);
   const nats=imp.itens.filter(t=>t.nat&&!t.dup).length;
   const opts=[...cfg.cartoes.map(c=>({id:c.id,n:'💳 '+c.nome})),...cfg.contas.map(c=>({id:c.id,n:c.emoji+' '+c.nome}))];
-  let h=cab('Importar extrato')+
-  `<label>Esses lançamentos são de</label><select id="ip_pg" onchange="trocaDestino()">${opts.map(o=>`<option value="${o.id}" ${imp.pg===o.id?'selected':''}>${o.n}</option>`).join('')}</select>
-  <p class="hint" style="padding-left:0">${imp.itens.length} encontrados${dups?', '+dups+' já estavam lançados':''}${nats?', '+nats+' desmarcados por serem transferência entre suas contas':''}. Marque ou desmarque como quiser.</p>
+  const porLinha=imp.itens.some(t=>t.pg);
+  let h=cab(imp.sync?'Sincronizar':'Importar extrato')+
+  (porLinha?`<p class="hint" style="padding-left:0">Cada lançamento já vem com a conta de origem.</p>`
+   :`<label>Esses lançamentos são de</label><select id="ip_pg" onchange="trocaDestino()">${opts.map(o=>`<option value="${o.id}" ${imp.pg===o.id?'selected':''}>${o.n}</option>`).join('')}</select>`)+
+  `<p class="hint" style="padding-left:0">${imp.itens.length} encontrados${dups?', '+dups+' já estavam lançados':''}${nats?', '+nats+' desmarcados por serem transferência entre suas contas':''}. Marque ou desmarque como quiser.</p>
   ${imp.pdf?`<div class="note" style="border-left-color:var(--warn)"><b>Fatura em PDF</b>${imp.venc?'Vence em '+dataBR(imp.venc)+'/'+imp.venc.slice(0,4)+'. ':''}${imp.total?'A fatura soma '+brl(imp.total)+'. ':''}Tudo vai para a fatura de ${imp.fat?curtoMes(mesVenc(cartao(imp.pg),imp.fat)):'destino'}, mesmo o que foi comprado antes. Se você já pagou essa fatura, marque como paga depois em Cartões.</div>`:''}
   <div class="trio" style="grid-template-columns:1fr 1fr;margin-top:4px">
     <div><span class="lbl">Entrando</span><b class="up">${ent.length} ${ent.length===1?'entrada':'entradas'}, ${brl(somaE)}</b></div>
@@ -1115,11 +1118,11 @@ function formImportar(){
     <div class="t2">O extrato fecha em ${brl(imp.saldo)}. Marcado, a conta passa a mostrar exatamente isso.</div></div></div>`:''}
   ${!todosPos&&ehCartao&&imp.itens.some(t=>vImp(t)>0)?`<p class="hint" style="padding-left:0">Em cartão, valor positivo é pagamento de fatura e não entra como entrada.</p>`:''}`;
   imp.itens.forEach((t,i)=>{
-    const vv=vImp(t), ent=vv>0, pag=ehCartao&&ent;
+    const vv=vImp(t), ent=vv>0, pag=!!cartao(pgDe(t))&&ent;
     h+=`<div class="ilin ${t.usar?'':'off'}">
       <button class="ick" onclick="alterna(${i})" aria-label="${t.usar?'Tirar':'Incluir'}">${t.usar?'✓':''}</button>
       <div class="imid"><div class="t1">${esc(t.desc)}</div>
-        <div class="t2">${dataBR(t.data)}${t.met?' · '+t.met:''}${t.dup?' · já lançado':''}${t.quita?' · quita a fatura de '+curtoMes(mesVenc(cartao(t.quita.cid),t.quita.F))+' do '+esc(cartao(t.quita.cid).nome):t.nat?' · '+ROTULO[t.nat]:''}${pag&&!t.nat?' · pagamento de fatura':''}</div></div>
+        <div class="t2">${dataBR(t.data)}${t.pg?' · '+esc(pgNome(t.pg)):''}${t.met?' · '+t.met:''}${t.dup?' · já lançado':''}${t.quita?' · quita a fatura de '+curtoMes(mesVenc(cartao(t.quita.cid),t.quita.F))+' do '+esc(cartao(t.quita.cid).nome):t.nat?' · '+ROTULO[t.nat]:''}${pag&&!t.nat?' · pagamento de fatura':''}</div></div>
       <div class="iend"><div class="vmid ${ent?'up':''}">${ent?'+':'−'}${brl(Math.abs(vv))}</div>
         ${(!ent||!ehCartao)&&!t.quita?`<select class="icat" onchange="mudaCat(${i},this.value)">${(ent?RECS:cfg.categorias).map(c=>`<option value="${c.id}" ${t.cat===c.id?'selected':''}>${c.emoji} ${esc(c.nome)}</option>`).join('')}</select>`:''}</div></div>`;
   });
@@ -1132,16 +1135,16 @@ function confirmarImport(){
   const porMes={}; let n=0;
   let quitadas=0;
   imp.itens.filter(t=>t.usar).forEach(t=>{
-    const vv=vImp(t), ent=vv>0;
+    const vv=vImp(t), ent=vv>0, ehC=!!cartao(pgDe(t));
     if(t.quita){ // marca a fatura como paga, que já desconta da conta
       const c=cartao(t.quita.cid);
       if(c&&!paga(c,t.quita.F)){cfg.faturasPagas[pagaKey(c,t.quita.F)]={c:imp.pg,d:t.data};quitadas++}
       return;
     }
-    if(ehCartao&&ent)return; // pagamento de fatura não é lançamento
+    if(ehC&&ent)return; // pagamento de fatura não é lançamento
     const tx={id:uid(),t:ent?'r':'d',v:r2(Math.abs(vv)),desc:t.desc,
-      cat:t.cat||categorizar(t.desc,ent),pg:imp.pg,data:t.data,k:t.k};
-    if(imp.fat&&ehCartao)tx.fat=imp.fat;
+      cat:t.cat||categorizar(t.desc,ent),pg:pgDe(t),data:t.data,k:t.k};
+    if(imp.fat&&ehC)tx.fat=imp.fat;
     const k=mk(t.data); (porMes[k]=porMes[k]||[]).push(tx); n++;
   });
   if(!n&&!quitadas){fechar();return toast('Nada marcado para importar')}
@@ -1152,6 +1155,7 @@ function confirmarImport(){
     const c=conta(imp.pg);
     if(c){c.saldo=r2((+c.saldo||0)+(imp.saldo-saldoConta(imp.pg)));msg+=', saldo acertado'}
   }
+  if(imp.sync)cfg.bancos.forEach(b=>{b.desde=hoje()});
   cache();imp=null;fechar();render();
   toast(msg);
 }
@@ -1314,6 +1318,118 @@ function guardar(id,s){const v=num(val('g_v'));if(!(v>0))return toast('Valor inv
   o.guardado=Math.max(0,r2(o.guardado+s*v));salvarCfg();fechar();toast(s>0?'Guardado':'Retirado')}
 
 
+
+/* ---------- sincronização bancária ---------- */
+const WKKEY='worker-token';
+const getWk=()=>{try{return localStorage.getItem(WKKEY)||''}catch(e){return ''}};
+const setWk=v=>{try{v?localStorage.setItem(WKKEY,v.trim()):localStorage.removeItem(WKKEY)}catch(e){}};
+const temSync=()=>!!(cfg.wkUrl&&getWk());
+
+async function wk(caminho,params){
+  if(!temSync())throw new Error('sem_config');
+  const base=cfg.wkUrl.replace(/\/+$/,'');
+  const q=params?('?'+new URLSearchParams(params)):'';
+  const r=await fetch(base+caminho+q,{headers:{'x-app-token':getWk()}});
+  const d=await r.json().catch(()=>({}));
+  if(r.status===401)throw new Error('token_recusado');
+  if(!r.ok)throw new Error(d.detalhe||d.erro||('http_'+r.status));
+  return d;
+}
+async function testarSync(){
+  if(!temSync())return toast('Preencha o endereço e o token');
+  toast('Testando…');
+  try{ await wk('/'); toast('Backend respondendo') }
+  catch(e){ toast(e.message==='token_recusado'?'Token recusado pelo backend':'Não alcancei o backend: '+e.message) }
+}
+async function conectarBanco(){
+  if(!temSync())return toast('Configure o backend primeiro');
+  toast('Abrindo…');
+  let tok,PluggyConnect;
+  try{ tok=(await wk('/connect-token')).accessToken }
+  catch(e){ return toast(e.message==='token_recusado'?'Token recusado pelo backend':'Falhou ao pedir o token: '+e.message) }
+  try{ ({PluggyConnect}=await import('./vendor/pluggy-connect.min.mjs')) }
+  catch(e){ return toast('Não consegui carregar o conector') }
+  fechar();
+  new PluggyConnect({
+    connectToken:tok, includeSandbox:true,
+    onSuccess:d=>{
+      const id=d&&d.item&&d.item.id; if(!id)return toast('Conexão sem identificador');
+      if(!cfg.bancos.some(b=>b.id===id)){
+        cfg.bancos.push({id,nome:(d.item.connector&&d.item.connector.name)||'Banco',mapa:{},desde:''});
+        salvarCfg();
+      }
+      toast('Banco conectado');sincronizar();
+    },
+    onError:e=>toast('Conexão cancelada ou falhou'),
+  }).init();
+}
+function esqueceBanco(id){cfg.bancos=cfg.bancos.filter(b=>b.id!==id);salvarCfg();formSync()}
+
+// mapeia cada conta da Pluggy para uma conta ou cartão do app
+function destinoPluggy(b,c){
+  if(b.mapa&&b.mapa[c.id])return b.mapa[c.id];
+  const alvo=c.tipo==='CREDIT'?cfg.cartoes:cfg.contas;
+  const nome=semAcento((c.banco||'')+' '+(c.nome||''));
+  const achou=alvo.find(x=>x.nome.length>=3&&nome.includes(semAcento(x.nome)));
+  return achou?achou.id:'';
+}
+async function sincronizar(){
+  if(!cfg.bancos.length)return toast('Nenhum banco conectado');
+  toast('Sincronizando…');
+  const itens=[], mapa={};
+  let erro='';
+  for(const b of cfg.bancos){
+    let contas;
+    try{ contas=(await wk('/contas',{itemId:b.id})).contas||[] }
+    catch(e){ erro=e.message; continue }
+    for(const c of contas){
+      const pg=destinoPluggy(b,c);
+      if(!pg)continue; // sem destino conhecido: o usuário resolve no mapeamento
+      mapa[c.id]={pg,conta:c,banco:b};
+      let lancs=[];
+      const desde=b.desde||addM(mk(hoje()),-3)+'-01';
+      try{ lancs=(await wk('/lancamentos',{accountId:c.id,desde})).lancamentos||[] }
+      catch(e){ erro=e.message; continue }
+      for(const l of lancs){
+        if(!l.data||!l.valor)continue;
+        itens.push({data:l.data,v:l.valor,desc:limpaDesc(l.descricao),fit:'p:'+l.id,pg});
+      }
+    }
+  }
+  if(!itens.length){
+    if(erro)return toast('Falha ao sincronizar: '+erro);
+    return toast('Nada novo para trazer');
+  }
+  itens.sort((a,b)=>a.data.localeCompare(b.data));
+  imp={pg:itens[0].pg,inv:false,saldo:null,ajusta:false,sync:true,mapa,itens:itens.map(t=>{
+    const k=chaveTx(t), dup=todos().some(x=>x.k===k), nat=natureza(t.desc);
+    return {...t,k,dup,nat,quita:null,met:'',usar:!dup&&!nat,cat:categorizar(t.desc,t.v>0)};
+  })};
+  fechar();formImportar();
+}
+function formSync(){
+  abrir(cab('Sincronização')+
+  `<p class="hint" style="padding-left:0">O app conversa com um backend seu, que guarda o segredo da Pluggy. Sem ele, nada daqui funciona.</p>
+  <label>Endereço do backend</label><input id="sy_u" value="${esc(cfg.wkUrl||'')}" placeholder="https://algo.workers.dev" autocomplete="off" spellcheck="false">
+  <label>Token do app</label><input id="sy_t" value="${esc(getWk())}" placeholder="cole o APP_TOKEN" autocomplete="off" spellcheck="false">
+  <div class="acts"><button class="btn g" onclick="salvarSync()">Salvar</button><button class="btn g" onclick="salvarSync(1)">Salvar e testar</button></div>
+  <h4>Bancos conectados</h4>`+
+  (cfg.bancos.length?`<div class="grp"><div class="rows">`+cfg.bancos.map(b=>
+    `<div class="row" style="cursor:default"><span class="mid"><span class="t1">${esc(b.nome)}</span>
+     <span class="t2">${b.desde?'sincronizado até '+dataBR(b.desde):'ainda não sincronizado'}</span></span>
+     <button class="btn g s" onclick="esqueceBanco('${b.id}')">Remover</button></div>`).join('')+`</div></div>`
+   :`<p class="hint" style="padding-left:0">Nenhum ainda.</p>`)+
+  `<div class="acts"><button class="btn" onclick="conectarBanco()">Conectar banco</button>
+  ${cfg.bancos.length?`<button class="btn g" onclick="sincronizar()">Sincronizar agora</button>`:''}</div>
+  <div class="acts fim"><button class="btn g" onclick="abrirAjustes()">Voltar</button></div>`);
+}
+function salvarSync(testa){
+  cfg.wkUrl=(val('sy_u')||'').trim().replace(/\/+$/,'');
+  setWk(val('sy_t')||'');
+  salvarCfg();
+  if(testa)testarSync(); else toast('Salvo');
+}
+
 /* ---------- recomeçar ---------- */
 const RESETS={
   gastos:{
@@ -1427,6 +1543,8 @@ function formAjustes(){
   <div class="acts"><button class="btn g" onclick="exportar()">Baixar backup</button>
   <button class="btn g" onclick="document.getElementById('imp').click()">Restaurar backup</button></div>
   <input type="file" id="imp" style="display:none" onchange="importar(this)">
+  <h4>Sincronização</h4><p class="hint" style="padding-left:0">${temSync()?(cfg.bancos.length?cfg.bancos.length+(cfg.bancos.length===1?' banco conectado':' bancos conectados'):'Backend configurado, nenhum banco ainda.'):'Puxar lançamentos direto do banco, sem baixar extrato.'}</p>
+  <div class="acts"><button class="btn g" onclick="formSync()">${temSync()?'Gerenciar':'Configurar'}</button></div>
   <h4>Recomeçar</h4><p class="hint" style="padding-left:0">Apagar lançamentos, zerar o saldo anterior dos cartões ou limpar tudo.</p>
   <div class="acts"><button class="btn g" onclick="formRecomecar()">Opções de apagar</button></div>
   <p class="hint" style="text-align:center;padding-top:14px">Versão ${VERSAO}</p>

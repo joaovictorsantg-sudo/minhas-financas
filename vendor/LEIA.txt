@@ -1,2 +1,4 @@
 pdf.js 4.10.38 — Apache-2.0 — https://github.com/mozilla/pdf.js
 Usado apenas para ler faturas em PDF. Carregado sob demanda.
+pluggy-connect-sdk 2.15.0 — MIT — https://github.com/pluggyai/pluggy-connect-sdk
+Empacotado com esbuild para rodar no navegador sem CDN.
