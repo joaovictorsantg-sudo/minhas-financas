@@ -195,7 +195,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v45 — 24/11';
+const VERSAO='v46 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -219,7 +219,7 @@ const r2=v=>Math.round(v*100)/100;
 const r4=v=>Math.round(v*10000)/10000;
 
 const DEF={
-  salario:0, metaInvest:0, cotAt:'', cotTs:0, salarioQuando:'pu', nome:'', wkUrl:'', bancos:[], syncAuto:true, syncDireto:false, syncTs:0,
+  regras:[], salario:0, metaInvest:0, cotAt:'', cotTs:0, salarioQuando:'pu', nome:'', wkUrl:'', bancos:[], syncAuto:true, syncDireto:false, syncTs:0,
   contas:[
     {id:'conta',emoji:'🏦',nome:'Conta',saldo:0},
     {id:'dinheiro',emoji:'💵',nome:'Dinheiro',saldo:0}
@@ -946,7 +946,21 @@ const REGRAS=[
  {re:/renner|riachuelo|zara|cea|c&a|nike|adidas|shopee|shein|mercadolivre|mercado\s*livre|amazon|magalu|aliexpress/i, ids:['compras']},
  {re:/luz|copel|sanepar|energia|agua|internet|vivo|claro|tim\b|oi\s*fibra|aluguel|condom/i, ids:['casa','contas']},
 ];
-function categorizar(desc,ehEntrada){
+// as regras do usuário vêm primeiro: só ele sabe que um Pix para fulano é
+// a mensalidade da faculdade. Ficam no aparelho, nunca no código.
+function regraDe(desc,v){
+  const d=semAcento(String(desc||''));
+  for(const r of (cfg.regras||[])){
+    if(!r.txt)continue;
+    if(!d.includes(semAcento(r.txt)))continue;
+    if(r.v>0&&Math.abs(Math.abs(+v||0)-r.v)>0.005)continue;
+    if(cfg.categorias.some(c=>c.id===r.cat))return r.cat;
+  }
+  return '';
+}
+function categorizar(desc,ehEntrada,v){
+  const minha=ehEntrada?'':regraDe(desc,v);
+  if(minha)return minha;
   if(ehEntrada)return /sal[aá]rio|salario|remunera|folha|proventos/i.test(desc)?'salario':'extra';
   for(const r of REGRAS) if(r.re.test(desc))
     for(const id of r.ids) if(cfg.categorias.some(c=>c.id===id)) return id;
@@ -1159,7 +1173,7 @@ function lerExtrato(inp){
         const F=c?achaFatura(c,t.data,Math.abs(t.v)):null;
         if(c&&F)quita={cid:c.id,F};
       }
-      return {...t,k,dup,nat,quita,met:metodo(t),usar:!dup&&(!nat||!!quita),cat:categorizar(t.desc,t.v>0)};
+      return {...t,k,dup,nat,quita,met:metodo(t),usar:!dup&&(!nat||!!quita),cat:categorizar(t.desc,t.v>0,t.v)};
     })};
     formImportar();
   }).catch(()=>toast('Não deu para abrir o arquivo'));
@@ -1188,7 +1202,7 @@ function lerFaturaPDF(f){
     imp={pg:c.id,inv:false,saldo:null,ajusta:false,pdf:true,venc:r.venc,total:r.total,fat:F,
       itens:r.itens.map(t=>{
         const k=chaveTx(t), dup=todos().some(x=>x.k===k), nat=natureza(t.desc);
-        return {...t,k,dup,nat,quita:null,met:'crédito',usar:!dup&&t.v<0,cat:categorizar(t.desc,false)};
+        return {...t,k,dup,nat,quita:null,met:'crédito',usar:!dup&&t.v<0,cat:categorizar(t.desc,false,t.v)};
       })};
     formImportar();
   };
@@ -1207,7 +1221,7 @@ const vImp=t=>imp.inv?-t.v:t.v;
 const pgDe=t=>t.pg||imp.pg;
 function trocaDestino(){const e=$('#ip_pg');if(e)imp.pg=e.value;formImportar()}
 function inverter(){imp.inv=!imp.inv;
-  imp.itens.forEach(t=>{t.cat=categorizar(t.desc,vImp(t)>0)});
+  imp.itens.forEach(t=>{t.cat=categorizar(t.desc,vImp(t)>0,vImp(t))});
   formImportar();toast(imp.inv?'Sinais invertidos':'Sinais como vieram')}
 function alterna(i){imp.itens[i].usar=!imp.itens[i].usar;formImportar()}
 function mudaCat(i,v){imp.itens[i].cat=v}
@@ -1548,7 +1562,7 @@ function confirmarImport(){
     }
     if(ehC&&ent)return; // pagamento de fatura não é lançamento
     const tx={id:uid(),t:ent?'r':'d',v:r2(Math.abs(vv)),desc:t.desc,
-      cat:t.cat||categorizar(t.desc,ent),pg:pgDe(t),data:t.data,k:t.k};
+      cat:t.cat||categorizar(t.desc,ent,vv),pg:pgDe(t),data:t.data,k:t.k};
     if(imp.fat&&ehC)tx.fat=imp.fat;
     const k=mk(t.data); (porMes[k]=porMes[k]||[]).push(tx); n++;
   });
@@ -1864,7 +1878,7 @@ async function sincronizar(auto){
     const k=chaveTx(t);
     const nat=natureza(t.desc)||(cartao(t.pg)&&String(t.tp||'').toUpperCase()==='CREDIT'?'fatura':'');
     const dup=jaTem.has(k)||jaTemH.has(semOrigem(t));
-    return {...t,k,dup,nat,quita:null,met:'',usar:!dup&&!nat,cat:categorizar(t.desc,t.v>0)};
+    return {...t,k,dup,nat,quita:null,met:'',usar:!dup&&!nat,cat:categorizar(t.desc,t.v>0,t.v)};
   })};
   const novos=montado.itens.filter(t=>t.usar).length+semDestino+invsAg.length;
   if(auto){
@@ -1998,6 +2012,44 @@ function fazReset(k){
   toast(k==='tudo'?'App zerado':'Apagado');
 }
 
+function formRegras(){
+  const rs=cfg.regras||[], cats=cfg.categorias;
+  abrir(cab('Minhas regras')+
+  `<p class="hint" style="padding-left:0">Quando a descrição do lançamento contiver o texto, a categoria é essa. Serve para o que só você sabe: o Pix que é sempre a mensalidade, o mercado que você chama de outro nome. Fica só neste aparelho.</p>`+
+  (rs.length?`<div class="grp"><div class="rows">`+rs.map((r,i)=>{
+    const c=cats.find(x=>x.id===r.cat)||{emoji:'❔',nome:'—'};
+    return `<div class="row" style="cursor:default"><span class="mid"><span class="t1">${esc(r.txt)}${r.v>0?' · '+brl(r.v):''}</span>
+     <span class="t2">vira ${c.emoji} ${esc(c.nome)}</span></span>
+     <button class="btn g s" onclick="apagaRegra(${i})">Apagar</button></div>`}).join('')+`</div></div>`
+   :`<div class="grp"><div class="blank">Nenhuma regra ainda.</div></div>`)+
+  `<h4>Nova regra</h4>
+  <label>Quando a descrição tiver</label><input id="rg_t" placeholder="nome de quem recebe o Pix, nome da loja" autocomplete="off">
+  <div class="two"><div><label>Categoria</label><select id="rg_c">${cats.map(c=>`<option value="${c.id}">${c.emoji} ${esc(c.nome)}</option>`).join('')}</select></div>
+  <div><label>Só se o valor for</label><input id="rg_v" inputmode="decimal" placeholder="qualquer"></div></div>
+  <p class="hint" style="padding-left:0">O valor é opcional. Com ele, a regra só vale para esse valor exato — útil quando você manda quantias diferentes para a mesma pessoa.</p>
+  <div class="acts"><button class="btn" onclick="salvaRegra()">Criar regra</button></div>
+  ${rs.length?`<div class="acts fim"><button class="btn g" onclick="aplicaRegras()">Aplicar ao que já está lançado</button></div>
+  <p class="hint" style="padding-left:0">Revê os lançamentos existentes e recategoriza os que baterem com alguma regra.</p>`:''}`);
+}
+function salvaRegra(){
+  const txt=(val('rg_t')||'').trim(); if(txt.length<3)return toast('Escreva ao menos 3 letras');
+  const v=r2(num(val('rg_v'))||0), cat=val('rg_c');
+  cfg.regras=(cfg.regras||[]).concat([{txt,cat,v:v>0?v:0}]);
+  salvarCfg();formRegras();toast('Regra criada');
+}
+function apagaRegra(i){cfg.regras.splice(i,1);if(!cfg.regras.length)delete cfg.regras;salvarCfg();formRegras();toast('Regra apagada')}
+function aplicaRegras(){
+  let n=0;
+  Object.keys(meses).forEach(k=>meses[k].forEach(t=>{
+    if(t.t!=='d')return;
+    const c=regraDe(t.desc,t.v);
+    if(c&&c!==t.cat){t.cat=c;n++}
+  }));
+  if(n)cache();
+  fechar();render();
+  toast(n?n+(n===1?' lançamento recategorizado':' lançamentos recategorizados'):'Nada bateu com as regras');
+}
+
 /* ---------- ajustes ---------- */
 let rasc=null;
 function abrirAjustes(){
@@ -2048,6 +2100,9 @@ function formAjustes(){
   h+=`<button class="btn g s" onclick="addCat()" style="margin-top:6px">Adicionar categoria</button>
   <h4>Cotações</h4><p class="hint" style="padding-left:0">${getTk()?'Token da brapi salvo neste aparelho.':'Sem token. Só ITUB4, PETR4, VALE3 e MGLU3 atualizam sozinhas.'}</p>
   <button class="btn g s" onclick="formToken()">${getTk()?'Trocar token':'Colar token da brapi'}</button>
+  <h4>Minhas regras de categoria</h4><p class="hint" style="padding-left:0">${(cfg.regras||[]).length?(cfg.regras.length===1?'1 regra sua':cfg.regras.length+' regras suas')+'. O app usa elas antes das próprias.':'Ensine o app a reconhecer o que só você sabe, como um Pix que é sempre a mesma conta.'}</p>
+  <div class="acts"><button class="btn g" onclick="formRegras()">Ver e criar regras</button></div>
+
   <h4>Backup</h4><p class="hint" style="padding-left:0">Seus dados ficam neste aparelho. Baixe um backup de vez em quando, ou para levar para outro celular.</p>
   <div class="acts"><button class="btn g" onclick="exportar()">Baixar backup</button>
   <button class="btn g" onclick="document.getElementById('imp').click()">Restaurar backup</button></div>

@@ -117,6 +117,12 @@ parar de mexer neles. O banco demora a refletir uma mudança de
 fechamento, e sem isso a correção era desfeita na sincronização seguinte.
 Dá para devolver o controle ao banco na mesma tela.
 
+Regras de categoria do próprio usuário vêm antes das do app e ficam no
+aparelho: um Pix para uma pessoa pode ser a mensalidade da faculdade, e
+isso ninguém adivinha pela descrição. A regra casa por texto, ignorando
+acento e caixa, e aceita um valor exato para separar o que vai sempre
+para a mesma pessoa por motivos diferentes.
+
 O orçamento pode ser calculado a partir da meta de investir. Cada
 categoria com nome recebe o que de fato consome, medido desde o mês em
 que apareceu e nunca abaixo do ritmo do mês corrente; "Outros" fica com o
