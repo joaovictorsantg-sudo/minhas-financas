@@ -191,7 +191,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v7 — 24/11';
+const VERSAO='v8 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -489,7 +489,8 @@ inicio(){
   vis.forEach(c=>{const g=r2(r.porCat[c.id]||0),o=+c.orc||0,resta=r2(o-g);
     h+=`<div class="env" onclick="st.filtro='${c.id}';ir('lanc')"><div class="top"><span class="nm">${c.emoji} ${esc(c.nome)}</span><span class="vmid">${money(g)}</span><span class="lbl">de ${brl(o)}</span></div>
     ${barra(g,o)}<div class="sub">${resta>=0?'Resta '+brl(resta):'<span class="down">Passou '+brl(-resta)+' do planejado</span>'}</div></div>`});
-  h+=`</div><h2>Entradas e gastos</h2><div class="grp"><div class="pad">${grafico()}</div></div>`;
+  const g=grafico();
+  h+=`</div>`+(g?`<h2>Entradas e gastos</h2><div class="grp"><div class="pad" style="padding-bottom:14px">${g}</div></div>`:'');
   return h;
 },
 lanc(){
@@ -585,7 +586,9 @@ metas(){
 
 function grafico(){
   const ms=[];for(let i=5;i>=0;i--)ms.push(addM(st.mes,-i));
-  const d=ms.map(resumo),mx=Math.max(1,...d.map(x=>Math.max(x.rec,x.desp)));
+  const d=ms.map(resumo),pico=Math.max(...d.map(x=>Math.max(x.rec,x.desp)));
+  if(pico<=0)return `<div class="blank" style="padding:18px 6px">Sem lançamentos nos últimos seis meses.<br>O gráfico aparece assim que você registrar o primeiro.</div>`;
+  const mx=Math.max(1,pico);
   const W=318,H=108,bw=15,gap=3,step=W/6;
   let s=`<svg class="chart" viewBox="0 0 ${W} ${H+22}" width="100%" role="img" aria-label="Entradas e gastos dos últimos seis meses">`;
   ms.forEach((m,i)=>{const cx=i*step+step/2,hr=Math.max(d[i].rec?2:0,d[i].rec/mx*H),hd=Math.max(d[i].desp?2:0,d[i].desp/mx*H);
