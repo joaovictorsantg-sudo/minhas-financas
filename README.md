@@ -304,3 +304,7 @@ mas só valem no primeiro acesso, antes de existir algo salvo no aparelho.
 
 Depois de publicar uma versão nova, o service worker atualiza o app na próxima
 vez que ele for aberto.
+
+A fatura fechada vem do banco sempre, porque é um número definitivo. A
+aberta depende do cartão: um banco mostra o parcial certo e o outro
+oscila durante o dia, então a escolha é por cartão, no formulário dele.
