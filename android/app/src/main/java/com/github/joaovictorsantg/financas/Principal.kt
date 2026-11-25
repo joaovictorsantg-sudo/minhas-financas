@@ -46,6 +46,27 @@ class Principal : AppCompatActivity() {
     setContentView(raiz)
 
     if (estado == null) web.loadUrl(SITE) else web.restoreState(estado)
+    receber(intent)
+  }
+
+  override fun onNewIntent(novo: Intent?) {
+    super.onNewIntent(novo)
+    intent = novo
+    receber(novo)
+  }
+
+  /**
+   * Comprovante compartilhado pelo banco. Pix enviado é o único movimento que
+   * não gera notificação, e o comprovante traz o valor e para quem foi.
+   */
+  private fun receber(i: Intent?) {
+    if (i?.action != Intent.ACTION_SEND) return
+    val texto = (i.getStringExtra(Intent.EXTRA_TEXT) ?: return).trim()
+    if (texto.isBlank()) return
+    val titulo = i.getStringExtra(Intent.EXTRA_SUBJECT).orEmpty()
+    if (Comprovante.guardar(this, titulo, texto)) {
+      web.post { web.evaluateJavascript("window.dispatchEvent(new Event('focus'))", null) }
+    }
   }
 
   @SuppressLint("SetJavaScriptEnabled", "AddJavascriptInterface")

@@ -23,6 +23,14 @@
         <action android:name="android.intent.action.MAIN" />
         <category android:name="android.intent.category.LAUNCHER" />
       </intent-filter>
+
+      <!-- "compartilhar comprovante" do banco entrega o Pix enviado, que é o
+           único movimento sobre o qual ninguém manda notificação -->
+      <intent-filter>
+        <action android:name="android.intent.action.SEND" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <data android:mimeType="text/plain" />
+      </intent-filter>
     </activity>
 
     <!-- o Android só entrega notificação a quem declara este serviço e recebe

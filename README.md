@@ -127,7 +127,12 @@ Instalado como aplicativo Android — a pasta `android/`, compilada pelo
 GitHub a cada mudança — o app pode ler as notificações dos bancos e das carteiras do celular, com a
 permissão que o Android pede uma vez. A compra no crédito aparece no
 instante em que o banco avisa, em vez de esperar o dia que ele leva para
-processá-la. Aviso de banco cujo destino já foi
+processá-la. Pix enviado não gera notificação em banco nenhum, e é o único movimento
+assim. Para ele, o app é um destino de compartilhamento: o comprovante
+que o banco oferece depois do envio traz valor, data e para quem foi, e
+é lido dos rótulos que ele usa.
+
+Aviso de banco cujo destino já foi
 escolhido uma vez pode entrar sem revisão, se a pessoa quiser; o que o
 app não sabe onde pôr continua esperando, porque lançar na conta errada
 é pior que esperar. O destino de cada banco é aprendido da primeira
