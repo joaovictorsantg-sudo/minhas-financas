@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v65 — 25/11';
+const VERSAO='v66 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -334,10 +334,20 @@ function salvarToken(){setTk(val('tk_v')||'');fechar();buscarCotacoes(false)}
 
 /* ---------- backup ---------- */
 function exportar(){
+  const texto=JSON.stringify({app:'minhas-financas',v:3,em:new Date().toISOString(),cfg,meses},null,2);
+  const nome='financas-'+hoje()+'.json';
+  // no aplicativo Android o download comum não sai do WebView: quem grava é ele
   try{
-    const b=new Blob([JSON.stringify({app:'minhas-financas',v:3,em:new Date().toISOString(),cfg,meses},null,2)],{type:'application/json'});
+    if(noAparelho()&&typeof Aparelho.guardarArquivo==='function'){
+      const b64=btoa(String.fromCharCode(...new TextEncoder().encode(texto)));
+      const onde=Aparelho.guardarArquivo(nome,b64);
+      return toast(onde?'Backup salvo em '+onde:'Não deu para salvar o backup');
+    }
+  }catch(e){ return toast('Não deu para salvar o backup') }
+  try{
+    const b=new Blob([texto],{type:'application/json'});
     const u=URL.createObjectURL(b),a=document.createElement('a');
-    a.href=u;a.download='financas-'+hoje()+'.json';document.body.appendChild(a);a.click();a.remove();
+    a.href=u;a.download=nome;document.body.appendChild(a);a.click();a.remove();
     setTimeout(()=>URL.revokeObjectURL(u),3000);toast('Backup baixado');
   }catch(e){toast('Não deu para baixar o backup')}
 }
