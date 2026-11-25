@@ -210,7 +210,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v60 — 25/11';
+const VERSAO='v61 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -2118,7 +2118,9 @@ function formSync(){
   <h4>Bancos conectados</h4>`+
   (cfg.bancos.length?`<div class="grp"><div class="rows">`+cfg.bancos.map(b=>
     `<div class="row" style="cursor:default"><span class="mid"><span class="t1">${esc(b.nome)}</span>
-     <span class="t2">${b.lidoEm?'o banco foi lido '+quando(b.lidoEm):b.desde?'sincronizado até '+dataBR(b.desde):'ainda não sincronizado'}</span></span>
+     <span class="t2">${b.lidoEm?'lido '+quando(b.lidoEm):b.desde?'sincronizado até '+dataBR(b.desde):'ainda não sincronizado'}${
+       (()=>{const ns=Object.values(b.mapa||{}).map(id=>(conta(id)||cartao(id)||{}).nome).filter(Boolean);
+         return ns.length?' · '+esc(ns.join(', ')):''})()}</span></span>
      <button class="btn g s" onclick="relerBanco('${b.id}')">Reler</button>
      <button class="btn g s" onclick="esqueceBanco('${b.id}')">Remover</button></div>`).join('')+`</div></div>`
    :`<p class="hint" style="padding-left:0">Nenhum ainda.</p>`)+
