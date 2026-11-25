@@ -210,7 +210,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v56 — 24/11';
+const VERSAO='v57 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -2079,6 +2079,7 @@ function msgErro(m){
   if(/LOGIN_ERROR|INVALID_CREDENTIALS/i.test(m))return 'a conexão com o banco expirou — reconecte em meu.pluggy.ai';
   if(/UPDATING|OUTDATED/i.test(m))return 'o banco ainda está atualizando os dados — tente de novo em alguns minutos';
   if(/rate.?limit|too many|\b429\b/i.test(m))return 'a Pluggy já foi consultada há pouco; vale uma vez por hora';
+  if(/cant be update|cannot be updated/i.test(m))return 'essa conexão não aceita releitura pela API';
   if(/Failed to fetch|NetworkError/i.test(m))return 'não alcancei o backend';
   return curto(m);
 }
@@ -2099,6 +2100,7 @@ function formSync(){
   (cfg.bancos.length?`<div class="grp"><div class="rows">`+cfg.bancos.map(b=>
     `<div class="row" style="cursor:default"><span class="mid"><span class="t1">${esc(b.nome)}</span>
      <span class="t2">${b.desde?'sincronizado até '+dataBR(b.desde):'ainda não sincronizado'}</span></span>
+     <button class="btn g s" onclick="relerBanco('${b.id}')">Reler</button>
      <button class="btn g s" onclick="esqueceBanco('${b.id}')">Remover</button></div>`).join('')+`</div></div>`
    :`<p class="hint" style="padding-left:0">Nenhum ainda.</p>`)+
   `<p class="hint" style="padding-left:0">No plano gratuito, conecte seus bancos antes em <b>meu.pluggy.ai</b>. Aqui no widget escolha o conector <b>MeuPluggy</b> — não o seu banco, nem o Sandbox — e entre com a conta do Meu Pluggy.</p>
@@ -2113,26 +2115,35 @@ function formSync(){
     <div class="t2">Entra direto, com a categoria adivinhada. Transferência e repetido continuam de fora.</div></div></div>`:''}
   <div class="acts"><button class="btn" onclick="conectarBanco()">Conectar banco</button>
   ${cfg.bancos.length?`<button class="btn g" onclick="sincronizar()">Sincronizar agora</button>`:''}</div>
-  ${cfg.bancos.length?`<div class="acts"><button class="btn g" onclick="pedirAtualizacao()">Pedir ao banco agora</button></div>
-  <p class="hint" style="padding-left:0">A Pluggy relê seu banco a cada 24 horas. Isto pede que releia agora — leva alguns minutos, e depois é só sincronizar. Vale uma vez por hora.</p>
+  ${cfg.bancos.length?`<p class="hint" style="padding-left:0">A Pluggy relê seu banco a cada 24 horas, e sincronizar lê o que ela guardou. <b>Reler</b>, ao lado de cada banco acima, pede uma leitura nova — leva alguns minutos, e depois é só sincronizar.</p>
   <div class="acts"><button class="btn g" onclick="puxarTudo()">Trazer o histórico inteiro</button></div>
   <p class="hint" style="padding-left:0">Esquece até onde já veio e pede de novo os últimos 12 meses. O que já está lançado é reconhecido e vem desmarcado.</p>`:''}
   <div class="acts fim"><button class="btn g" onclick="abrirAjustes()">Voltar</button></div>`);
 }
-// A Pluggy guarda uma foto do banco e a refaz de tempos em tempos. Sincronizar
-// lê essa foto; isto pede uma foto nova.
-async function pedirAtualizacao(){
-  if(!cfg.bancos.length)return;
-  toast('Pedindo ao banco…');
-  let ok=0; const ruins=[];
-  for(const b of cfg.bancos){
-    try{ await wk('/atualizar',{itemId:b.id},{method:'POST'}); ok++; b.pedidoEm=Date.now() }
-    catch(e){ ruins.push((b.nome||'Banco')+': '+msgErro(e.message)) }
+// A Pluggy guarda uma cópia do banco e a refaz de tempos em tempos. Sincronizar
+// lê essa cópia; isto pede uma cópia nova. A conexão do plano gratuito não
+// aceita o pedido pela API, e aí o caminho é o próprio widget.
+async function relerBanco(id){
+  const b=cfg.bancos.find(x=>x.id===id); if(!b)return;
+  toast('Pedindo…');
+  try{
+    await wk('/atualizar',{itemId:id},{method:'POST'});
+    b.pedidoEm=Date.now(); salvarCfg();
+    return toast('Pedido feito. Sincronize daqui a alguns minutos.');
+  }catch(e){
+    if(!/cant be update|cannot be updated|MeuPluggy/i.test(String(e.message||'')))
+      return toast(msgErro(e.message));
   }
-  salvarCfg();
-  if(ok&&!ruins.length)return toast(ok===1?'Pedido feito. Sincronize daqui a alguns minutos.':ok+' bancos avisados. Sincronize daqui a alguns minutos.');
-  if(ok)return toast(ok+' de '+cfg.bancos.length+' avisados. '+ruins[0]);
-  toast(ruins[0]||'Não consegui pedir agora');
+  toast('Abrindo o conector…');
+  let tok,PluggyConnect;
+  try{ tok=(await wk('/connect-token',{itemId:id})).accessToken }
+  catch(e){ return toast(msgErro(e.message)) }
+  try{ ({PluggyConnect}=await import('./vendor/pluggy-connect.min.mjs')) }
+  catch(e){ return toast('Não consegui carregar o conector') }
+  fechar();
+  new PluggyConnect({connectToken:tok,includeSandbox:true,updateItem:id,
+    onSuccess:()=>{toast('Banco relido');sincronizar()},
+    onError:()=>toast('Releitura cancelada ou falhou')}).init();
 }
 function puxarTudo(){
   cfg.bancos.forEach(b=>{b.desde='';b.desdeC={}});
