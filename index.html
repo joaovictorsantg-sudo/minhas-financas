@@ -210,7 +210,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v59 — 25/11';
+const VERSAO='v60 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1963,6 +1963,33 @@ async function conectarBanco(){
     onError:e=>toast('Conexão cancelada ou falhou'),
   }).init();
 }
+// quando a Pluggy leu o banco pela última vez: é esse o relógio que manda,
+// não o da sincronização do app
+function quando(iso){
+  const d=new Date(iso); if(isNaN(d))return '';
+  const h=d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  const min=Math.round((Date.now()-d.getTime())/60000);
+  if(min<90)return 'há '+(min<2?'instantes':min+' minutos');
+  const local=d.toLocaleDateString('sv-SE'); // data no fuso de quem lê, não em UTC
+  const ontem=new Date(Date.now()-864e5).toLocaleDateString('sv-SE');
+  if(local===hoje())return 'hoje às '+h;
+  if(local===ontem)return 'ontem às '+h;
+  return dataBR(local)+' às '+h;
+}
+let leiturasVistas=false;
+async function verLeituras(){
+  // uma consulta por sessão: a Pluggy relê o banco uma vez por dia, e consultar
+  // de novo a cada redesenho só serviria para redesenhar de novo
+  if(leiturasVistas||!temSync()||!cfg.bancos.length)return;
+  leiturasVistas=true;
+  let mudou=false;
+  for(const b of cfg.bancos){
+    try{ const r=await wk('/item',{itemId:b.id});
+         if(r.atualizadoEm&&r.atualizadoEm!==b.lidoEm){b.lidoEm=r.atualizadoEm;mudou=true} }
+    catch(e){}
+  }
+  if(mudou){salvarCfg();if($('#sheet')&&/Sincroniza/.test($('#sheet').textContent||''))formSync()}
+}
 function esqueceBanco(id){cfg.bancos=cfg.bancos.filter(b=>b.id!==id);salvarCfg();formSync()}
 
 // mapeia cada conta da Pluggy para uma conta ou cartão do app
@@ -2091,7 +2118,7 @@ function formSync(){
   <h4>Bancos conectados</h4>`+
   (cfg.bancos.length?`<div class="grp"><div class="rows">`+cfg.bancos.map(b=>
     `<div class="row" style="cursor:default"><span class="mid"><span class="t1">${esc(b.nome)}</span>
-     <span class="t2">${b.desde?'sincronizado até '+dataBR(b.desde):'ainda não sincronizado'}</span></span>
+     <span class="t2">${b.lidoEm?'o banco foi lido '+quando(b.lidoEm):b.desde?'sincronizado até '+dataBR(b.desde):'ainda não sincronizado'}</span></span>
      <button class="btn g s" onclick="relerBanco('${b.id}')">Reler</button>
      <button class="btn g s" onclick="esqueceBanco('${b.id}')">Remover</button></div>`).join('')+`</div></div>`
    :`<p class="hint" style="padding-left:0">Nenhum ainda.</p>`)+
@@ -2111,6 +2138,7 @@ function formSync(){
   <div class="acts"><button class="btn g" onclick="puxarTudo()">Trazer o histórico inteiro</button></div>
   <p class="hint" style="padding-left:0">Esquece até onde já veio e pede de novo os últimos 12 meses. O que já está lançado é reconhecido e vem desmarcado.</p>`:''}
   <div class="acts fim"><button class="btn g" onclick="abrirAjustes()">Voltar</button></div>`);
+  verLeituras(); // em segundo plano: a tela se atualiza quando chegar
 }
 // A Pluggy guarda uma cópia do banco e a refaz de tempos em tempos. Sincronizar
 // lê essa cópia; isto pede uma cópia nova. A conexão do plano gratuito não
@@ -2120,7 +2148,7 @@ async function relerBanco(id){
   toast('Pedindo…');
   try{
     await wk('/atualizar',{itemId:id},{method:'POST'});
-    b.pedidoEm=Date.now(); salvarCfg();
+    b.pedidoEm=Date.now(); leiturasVistas=false; salvarCfg();
     return toast('Pedido feito. Sincronize daqui a alguns minutos.');
   }catch(e){
     // a conexão do plano gratuito recusa o pedido aqui e também pelo conector:
