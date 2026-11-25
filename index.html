@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v84 — 25/11';
+const VERSAO='v85 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1698,6 +1698,10 @@ function leNotif(n){
   // o comprovante é compartilhado depois, e traz a data de quando aconteceu
   const dm=((n.titulo||'')+' '+(n.texto||'')).match(/\b(\d{2})\/(\d{2})\/(\d{4})\b/);
   const quandoISO=dm?`${dm[3]}-${dm[2]}-${dm[1]}`:'';
+  // compartilhar o mesmo comprovante duas vezes é a coisa mais fácil do
+  // mundo; o identificador da transação diz que é a mesma
+  const idm=((n.titulo||'')+' '+(n.texto||'')).match(/\b(?:id|e2e)[^\n:]{0,20}:?\s*([A-Za-z0-9]{20,40})\b/i);
+  const idTx=idm?idm[1]:'';
   // "Quem recebeu" é o rótulo de um campo, não o sentido do dinheiro: num
   // comprovante os dois lados aparecem, e quem decide é o que está no alto
   const tDir=t.replace(/quem (recebeu|pagou)|recebedor|pagador|destinatario|remetente|beneficiario|favorecido/g,' ');
@@ -1752,7 +1756,7 @@ function leNotif(n){
   // aconteceu foi um Pix dele para você, e a direção importa mais que o nome
   const pix=/\bpix\b|transferencia/.test(t);
   const descr=pix&&!/^pix\s/i.test(desc)?((entrada?'Pix de ':'Pix para ')+desc):desc;
-  return {t:entrada?'r':'d', pg:(alvo||{}).id||'', desc:descr, dataISO:quandoISO, certo,
+  return {t:entrada?'r':'d', pg:(alvo||{}).id||'', desc:descr, dataISO:quandoISO, certo, idTx,
     cat:categorizar(desc,entrada,entrada?+n.valor:-n.valor)};
 }
 // O que interessa na notificação é o estabelecimento, não a frase do banco:
@@ -1818,21 +1822,31 @@ function avisaNotifs(){
 // Entra direto só o que ele sabe onde pôr: destino já escolhido antes para
 // aquele banco, ou nome de conta reconhecido no próprio aviso. O resto espera,
 // porque lançar na conta errada é pior que esperar.
+// o mesmo movimento já lançado: pelo identificador quando ele existe, e
+// senão pelo que o define — mesma conta, mesmo dia, mesmo valor, mesmo lado
+function jaLancado(n,data){
+  return todos().some(t=>n.idTx?t.idTx===n.idTx
+    :(t.pg===n.pg&&t.data===data&&t.t===n.t&&Math.abs(r2(t.v)-r2(+n.valor))<0.005));
+}
 function notifsAoAbrir(){
   if(!cfg.notifDireto)return;
   const ns=notifs(); if(!ns.length)return;
   const lidos=ns.map(n=>({...n, ...leNotif(n)}));
   const certos=lidos.filter(n=>n.pg&&n.certo);
   if(!certos.length)return;
+  const repetidos=[];
   certos.forEach(n=>{
     const data=n.dataISO||new Date(+n.quando||Date.now()).toLocaleDateString('sv-SE');
-    const tx={id:uid(),t:n.t,v:r2(+n.valor),desc:n.desc,cat:n.cat,pg:n.pg,data};
+    if(jaLancado(n,data)){repetidos.push(n);return}
+    const tx={id:uid(),t:n.t,v:r2(+n.valor),desc:n.desc,cat:n.cat,pg:n.pg,data,idTx:n.idTx||undefined};
     if(n.t==='d'&&cartao(n.pg))tx.parc=1;
     const K=mk(data);meses[K]=(meses[K]||[]).concat(tx);
   });
   try{ Aparelho.descartar(JSON.stringify(certos.map(n=>n.id))) }catch(e){}
   cache();render();
-  toast(certos.length+(certos.length===1?' lançamento do banco':' lançamentos do banco'));
+  const novos=certos.length-repetidos.length;
+  toast(novos?novos+(novos===1?' lançamento do banco':' lançamentos do banco')
+    :repetidos.length===1?'Esse já estava lançado':'Esses já estavam lançados');
 }
 let rascNotifs=null;
 function formNotifs(){
@@ -1873,15 +1887,18 @@ function jogaNotifs(){
 function lancaNotifs(){
   const usar=(rascNotifs||[]).filter(n=>n.usar&&n.pg);
   if(!usar.length)return toast('Nada marcado');
+  let feitos=0, repetidos=0;
   usar.forEach(n=>{
     const data=n.dataISO||new Date(+n.quando||Date.now()).toLocaleDateString('sv-SE');
-    const tx={id:uid(),t:n.t,v:r2(+n.valor),desc:n.desc,cat:n.cat,pg:n.pg,data};
+    if(jaLancado(n,data)){repetidos++;return}
+    const tx={id:uid(),t:n.t,v:r2(+n.valor),desc:n.desc,cat:n.cat,pg:n.pg,data,idTx:n.idTx||undefined};
     if(n.t==='d'&&cartao(n.pg))tx.parc=1;
-    const K=mk(data);meses[K]=(meses[K]||[]).concat(tx);
+    const K=mk(data);meses[K]=(meses[K]||[]).concat(tx);feitos++;
   });
   try{ Aparelho.descartar(JSON.stringify((rascNotifs||[]).map(n=>n.id))) }catch(e){}
   rascNotifs=null;cache();fechar();render();
-  toast(usar.length+(usar.length===1?' lançamento feito':' lançamentos feitos'));
+  toast(feitos?feitos+(feitos===1?' lançamento feito':' lançamentos feitos')+(repetidos?' ('+repetidos+' já estava lançado)':'')
+    :repetidos===1?'Esse já estava lançado':'Esses já estavam lançados');
 }
 
 function formFiltro(){

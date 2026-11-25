@@ -131,6 +131,10 @@ processá-la. Pix enviado não gera notificação em banco nenhum, e é o único
 assim. Para ele, o app é um destino de compartilhamento: o comprovante
 que o banco oferece depois do envio traz valor, data e para quem foi.
 
+Compartilhar o mesmo comprovante duas vezes é fácil, e o identificador
+da transação que ele traz diz que é o mesmo movimento. Sem esse
+identificador, valem conta, dia, valor e lado.
+
 O comprovante tem duas colunas, rótulo à esquerda e valor à direita, e
 lido bloco a bloco sai uma coluna inteira e depois a outra: "Instituição"
 deixa de ter ao lado o banco a que pertence. As linhas são refeitas pela
