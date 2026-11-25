@@ -127,8 +127,10 @@ Instalado como aplicativo Android — a pasta `android/`, compilada pelo
 GitHub a cada mudança — o app pode ler as notificações dos bancos e das carteiras do celular, com a
 permissão que o Android pede uma vez. A compra no crédito aparece no
 instante em que o banco avisa, em vez de esperar o dia que ele leva para
-processá-la. Banco e carteira avisam a mesma
-compra cada um do seu jeito, e dois avisos de mesmo valor em poucos
+processá-la. O destino de cada banco é
+aprendido da primeira correção: o nome do aplicativo do banco e o nome
+que a pessoa deu à conta não têm por que coincidir. Banco e carteira
+avisam a mesma compra cada um do seu jeito, e dois avisos de mesmo valor em poucos
 minutos contam como um. A notificação é lida neste aparelho e descartada
 depois de virar lançamento; nada sai daqui.
 
