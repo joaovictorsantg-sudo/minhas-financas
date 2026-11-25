@@ -129,8 +129,13 @@ permissão que o Android pede uma vez. A compra no crédito aparece no
 instante em que o banco avisa, em vez de esperar o dia que ele leva para
 processá-la. Pix enviado não gera notificação em banco nenhum, e é o único movimento
 assim. Para ele, o app é um destino de compartilhamento: o comprovante
-que o banco oferece depois do envio traz valor, data e para quem foi, e
-é lido dos rótulos que ele usa.
+que o banco oferece depois do envio traz valor, data e para quem foi.
+
+Nenhum banco compartilha esse comprovante como texto — o Inter manda
+imagem, o PicPay um PDF desenhado —, então o aplicativo lê as letras da
+figura ali mesmo, sem internet. Num comprovante as duas pontas vêm
+rotuladas e o sentido está no alto: "quem recebeu" interessa quando o
+dinheiro saiu, "quem pagou" quando entrou.
 
 Aviso de banco cujo destino já foi
 escolhido uma vez pode entrar sem revisão, se a pessoa quiser; o que o

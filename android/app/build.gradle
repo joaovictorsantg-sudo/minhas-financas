@@ -11,8 +11,8 @@ android {
     applicationId 'com.github.joaovictorsantg.financas'
     minSdk 26
     targetSdk 34
-    versionCode 4
-    versionName '1.3'
+    versionCode 5
+    versionName '1.4'
   }
 
   buildFeatures { buildConfig true }
@@ -31,4 +31,7 @@ dependencies {
   implementation 'androidx.core:core-ktx:1.13.1'
   implementation 'androidx.appcompat:appcompat:1.7.0'
   implementation 'androidx.activity:activity-ktx:1.9.2'
+  // comprovante de Pix só existe como imagem ou PDF desenhado: ler as letras
+  // é o único jeito, e este modelo vem junto e funciona sem internet
+  implementation 'com.google.mlkit:text-recognition:16.0.1'
 }

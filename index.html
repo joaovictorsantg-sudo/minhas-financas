@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v79 — 25/11';
+const VERSAO='v80 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1670,7 +1670,7 @@ function apagaPagtos(){
 // O aparelho só aparece quando o app é o APK; no navegador nada disto existe.
 // A parte web se atualiza sozinha; o APK só muda quando mexo no código
 // nativo. Sem isto não haveria como saber que chegou um APK novo.
-const APK='1.3';
+const APK='1.4';
 const APK_LINK='https://github.com/joaovictorsantg-sudo/minhas-financas/releases/download/apk/minhas-financas.apk';
 const apkVelho=()=>{try{return noAparelho()&&typeof Aparelho.versaoApp==='function'&&Aparelho.versaoApp()!==APK}catch(e){return false}};
 const noAparelho=()=>{try{return typeof Aparelho!=='undefined'&&!!Aparelho&&typeof Aparelho.pendentes==='function'}catch(e){return false}};
@@ -1685,8 +1685,12 @@ function leNotif(n){
   // o comprovante é compartilhado depois, e traz a data de quando aconteceu
   const dm=((n.titulo||'')+' '+(n.texto||'')).match(/\b(\d{2})\/(\d{2})\/(\d{4})\b/);
   const quandoISO=dm?`${dm[3]}-${dm[2]}-${dm[1]}`:'';
-  const entrada=/(recebeu|recebido|entrou|credito em conta|transferencia recebida|deposito|estorno)/.test(t)
-    &&!/compra|aprovad|debitad/.test(t);
+  // "Quem recebeu" é o rótulo de um campo, não o sentido do dinheiro: num
+  // comprovante os dois lados aparecem, e quem decide é o que está no alto
+  const tDir=t.replace(/quem (recebeu|pagou)|recebedor|pagador|destinatario|remetente|beneficiario|favorecido/g,' ');
+  const entrada=!/(enviad|enviei|voce (enviou|pagou|transferiu)|pagamento (realizado|efetuado)|transferencia enviada)/.test(tDir)
+    &&/(recebeu|recebido|entrou|credito em conta|transferencia recebida|deposito|estorno)/.test(tDir)
+    &&!/compra|aprovad|debitad/.test(tDir);
   // a carteira do celular avisa a compra sem dizer o banco, e aproximação é
   // quase sempre crédito
   const carteira=/wallet|carteira|google pay|samsung pay/.test(semAcento(n.banco||''));
@@ -1709,7 +1713,7 @@ function leNotif(n){
   const valido=guardado&&(conta(guardado)||cartao(guardado));
   const alvo=valido?{id:guardado}
     :entrada?porNome(cfg.contas):credito?(porNome(cfg.cartoes)||porNome(cfg.contas)):porNome(cfg.contas);
-  const desc=nomeNaNotif(n);
+  const desc=nomeNaNotif(n,entrada);
   // "Henrique Souza da Costa" no extrato parece um gasto com alguém; o que
   // aconteceu foi um Pix dele para você, e a direção importa mais que o nome
   const pix=/\bpix\b|transferencia/.test(t);
@@ -1724,7 +1728,7 @@ function leNotif(n){
 const ateORotulo=v=>String(v||'')
   .split(/\s+(?:cpf|cnpj|data|hora|institui|ag[êe]ncia|conta|valor|banco|chave|origem|destino|tipo|e-?mail|telefone|id\b)/i)[0]
   .replace(/\s{2,}/g,' ').trim();
-function nomeNaNotif(n){
+function nomeNaNotif(n,entrada){
   // A carteira põe o estabelecimento no título e deixa o texto só com valor e
   // cartão ("TRANSP COLET*Transp. E" / "R$ 6,13 com Banco Inter Gold ••1364").
   // O banco faz o contrário: título genérico, nome no texto.
@@ -1750,8 +1754,12 @@ function nomeNaNotif(n){
      .replace(/\s{2,}/g,' ');
   const pega=re=>{const m=t.match(re);return m?ateORotulo(m[1]):''};
   // comprovante vem rotulado, e o rótulo é a pista mais confiável que existe
-  const rotulo=pega(/\b(?:destinat[áa]rio|recebedor|quem recebeu|para quem|benefici[áa]rio|pagador|quem pagou|remetente)\s*:?\s*([^,;.\n]{3,40})/i);
-  if(rotulo)return limpaDesc(ateORotulo(rotulo))||rotulo;
+  // num comprovante as duas pontas vêm rotuladas, e a que interessa é a outra:
+  // quem recebeu, se o dinheiro saiu; quem pagou, se entrou
+  const rotulo=pega(entrada
+    ? /\b(?:pagador|quem pagou|remetente|origem)\s*:?\s*(?:nome\s*:?\s*)?([^,;.\n]{3,60})/i
+    : /\b(?:destinat[áa]rio|recebedor|quem recebeu|para quem|benefici[áa]rio|favorecido)\s*:?\s*(?:nome\s*:?\s*)?([^,;.\n]{3,60})/i);
+  if(rotulo)return limpaDesc(rotulo)||rotulo;
   // "Fulano te enviou" é o nome; "Você enviou para Fulano" é a outra ponta
   const enviou=pega(/^\s*([^,.;]{3,40}?)\s+(?:te\s+)?(?:enviou|mandou|transferiu|pagou)\b/i);
   const dePessoa=/^(voce|vc|eu)$/.test(semAcento(enviou).trim())?'':enviou;

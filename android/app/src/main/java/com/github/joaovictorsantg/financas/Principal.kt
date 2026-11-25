@@ -13,6 +13,7 @@ import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
+import android.widget.Toast
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import androidx.activity.result.contract.ActivityResultContracts
@@ -62,12 +63,20 @@ class Principal : AppCompatActivity() {
    */
   private fun receber(i: Intent?) {
     if (i?.action != Intent.ACTION_SEND) return
+    val figura = i.getParcelableExtra<android.net.Uri>(Intent.EXTRA_STREAM)
+    if (figura != null) {
+      Toast.makeText(this, "Lendo o comprovante…", Toast.LENGTH_SHORT).show()
+      Comprovante.lerFigura(this, figura, i.type) { deu -> if (deu) avisarWeb() }
+      return
+    }
     val texto = (i.getStringExtra(Intent.EXTRA_TEXT) ?: return).trim()
     if (texto.isBlank()) return
     val titulo = i.getStringExtra(Intent.EXTRA_SUBJECT).orEmpty()
-    if (Comprovante.guardar(this, titulo, texto)) {
-      web.post { web.evaluateJavascript("window.dispatchEvent(new Event('focus'))", null) }
-    }
+    if (Comprovante.guardar(this, titulo, texto)) avisarWeb()
+  }
+
+  private fun avisarWeb() {
+    web.post { web.evaluateJavascript("window.dispatchEvent(new Event('focus'))", null) }
   }
 
   @SuppressLint("SetJavaScriptEnabled", "AddJavascriptInterface")
