@@ -210,7 +210,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v58 — 25/11';
+const VERSAO='v59 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -2107,7 +2107,7 @@ function formSync(){
     <div class="t2">Entra direto, com a categoria adivinhada. Transferência e repetido continuam de fora.</div></div></div>`:''}
   <div class="acts"><button class="btn" onclick="conectarBanco()">Conectar banco</button>
   ${cfg.bancos.length?`<button class="btn g" onclick="sincronizar()">Sincronizar agora</button>`:''}</div>
-  ${cfg.bancos.length?`<p class="hint" style="padding-left:0">A Pluggy relê seu banco a cada 24 horas, e sincronizar lê o que ela guardou. <b>Reler</b>, ao lado de cada banco acima, pede uma leitura nova — leva alguns minutos, e depois é só sincronizar.</p>
+  ${cfg.bancos.length?`<p class="hint" style="padding-left:0">A Pluggy relê seu banco uma vez por dia, e sincronizar lê o que ela guardou. <b>Reler</b>, ao lado de cada banco, pede uma leitura nova onde a conexão aceita — no plano gratuito ela só é feita em meu.pluggy.ai.</p>
   <div class="acts"><button class="btn g" onclick="puxarTudo()">Trazer o histórico inteiro</button></div>
   <p class="hint" style="padding-left:0">Esquece até onde já veio e pede de novo os últimos 12 meses. O que já está lançado é reconhecido e vem desmarcado.</p>`:''}
   <div class="acts fim"><button class="btn g" onclick="abrirAjustes()">Voltar</button></div>`);
@@ -2123,19 +2123,17 @@ async function relerBanco(id){
     b.pedidoEm=Date.now(); salvarCfg();
     return toast('Pedido feito. Sincronize daqui a alguns minutos.');
   }catch(e){
-    if(!/cant be update|cannot be updated|MeuPluggy/i.test(String(e.message||'')))
-      return toast(msgErro(e.message));
+    // a conexão do plano gratuito recusa o pedido aqui e também pelo conector:
+    // a releitura é feita no próprio Meu Pluggy
+    if(/cant be update|cannot be updated|MeuPluggy/i.test(String(e.message||'')))
+      return abrir(cab('Reler o '+esc(b.nome||'banco'))+
+      `<p class="hint" style="padding-left:0">Esta conexão é do plano gratuito, e ela não aceita o pedido de releitura nem por aqui nem pelo conector. Nas palavras da própria Pluggy: os itens do Meu Pluggy só podem ser atualizados pelo aplicativo dela, e são atualizados uma vez por dia de todo jeito.</p>
+      <div class="note"><b>Como forçar agora</b>Entre em <b>meu.pluggy.ai</b>, abra a conexão do banco e atualize por lá. Depois volte e toque em Sincronizar.</div>
+      <p class="hint" style="padding-left:0">Mesmo assim, compra no crédito costuma levar um dia para o banco processar — até lá não existe nem para ele.</p>
+      <div class="acts"><button class="btn g" onclick="formSync()">Voltar</button>
+      <button class="btn" onclick="fechar();sincronizar()">Sincronizar assim mesmo</button></div>`);
+    return toast(msgErro(e.message));
   }
-  toast('Abrindo o conector…');
-  let tok,PluggyConnect;
-  try{ tok=(await wk('/connect-token',{itemId:id})).accessToken }
-  catch(e){ return toast(msgErro(e.message)) }
-  try{ ({PluggyConnect}=await import('./vendor/pluggy-connect.min.mjs')) }
-  catch(e){ return toast('Não consegui carregar o conector') }
-  fechar();
-  new PluggyConnect({connectToken:tok,includeSandbox:true,updateItem:id,
-    onSuccess:()=>{toast('Banco relido');sincronizar()},
-    onError:()=>toast('Releitura cancelada ou falhou')}).init();
 }
 function puxarTudo(){
   cfg.bancos.forEach(b=>{b.desde='';b.desdeC={}});

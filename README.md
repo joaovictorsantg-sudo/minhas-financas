@@ -203,11 +203,11 @@ quê. Sem isso a falha passava calada: bastava o banco devolver os
 investimentos para a tela abrir como se tudo tivesse vindo, e o extrato
 que faltava só aparecia como ausência.
 
-Sincronizar lê a cópia que a Pluggy mantém do banco, e ela é refeita a
-cada 24 horas. Reler força essa releitura: pela API quando a conexão
-aceita, e pelo próprio conector quando não — é o caso do plano gratuito.
-O que o banco ainda não processou continua sem aparecer de qualquer
-forma.
+Sincronizar lê a cópia que a Pluggy mantém do banco, refeita uma vez por
+dia. Reler força essa releitura onde a conexão aceita; a do plano
+gratuito não aceita por caminho nenhum, e nesse caso o app explica que
+ela é feita em meu.pluggy.ai. O que o banco ainda não processou continua
+sem aparecer de qualquer forma.
 
 A sincronização acontece sozinha ao abrir o app, no máximo de quatro em
 quatro horas, e nunca interrompe: se vier coisa nova, a tela inicial
