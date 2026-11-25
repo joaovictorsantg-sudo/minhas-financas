@@ -47,6 +47,18 @@ class Escuta : NotificationListenerService() {
       if (atual.optJSONObject(i)?.optString("id") == id) return
     }
 
+    // O banco e a carteira avisam a mesma compra, cada um do seu jeito. Dois
+    // avisos de mesmo valor em poucos minutos são o mesmo gasto: fica o
+    // primeiro, que costuma ser o da carteira, e o segundo não entra.
+    val valor = item.optDouble("valor", -1.0)
+    val quando = item.optLong("quando", 0L)
+    for (i in 0 until atual.length()) {
+      val o = atual.optJSONObject(i) ?: continue
+      if (Math.abs(o.optDouble("valor", -2.0) - valor) < 0.005 &&
+          Math.abs(o.optLong("quando", 0L) - quando) < 10 * 60 * 1000
+      ) return
+    }
+
     atual.put(item)
     // guardar as últimas: isto é uma caixa de entrada, não um arquivo
     val podadas = JSONArray()
@@ -71,6 +83,11 @@ object Bancos {
     "com.c6bank.app" to "C6",
     "br.com.neon" to "Neon",
     "com.mercadopago.wallet" to "Mercado Pago",
+    // pagamento por aproximação costuma ser avisado pela carteira, não pelo banco
+    "com.google.android.apps.walletnfcrel" to "Google Wallet",
+    "com.google.android.apps.wallet" to "Google Wallet",
+    "com.samsung.android.spay" to "Samsung Wallet",
+    "com.samsung.android.spaylite" to "Samsung Wallet",
   )
   fun nome(pacote: String): String? = mapa[pacote]
 }

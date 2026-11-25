@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v66 — 25/11';
+const VERSAO='v67 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1678,8 +1678,14 @@ function leNotif(n){
   const t=semAcento((n.titulo||'')+' '+(n.texto||''));
   const entrada=/(recebeu|recebido|entrou|credito em conta|transferencia recebida|deposito|estorno)/.test(t)
     &&!/compra|aprovad|debitad/.test(t);
-  const credito=/(cartao|credito|aprovada|compra aprovada|fatura)/.test(t)&&!/debito em conta|conta corrente/.test(t);
-  const porNome=(lista)=>lista.find(x=>semAcento(x.nome).includes(semAcento(n.banco||'')))||lista[0];
+  // a carteira do celular avisa a compra sem dizer o banco, e aproximação é
+  // quase sempre crédito
+  const carteira=/wallet|carteira|google pay|samsung pay/.test(semAcento(n.banco||''));
+  const credito=carteira
+    ||(/(cartao|credito|aprovada|compra aprovada|fatura)/.test(t)&&!/debito em conta|conta corrente/.test(t));
+  // o nome do cartão pode estar no próprio aviso, que é a pista melhor
+  const porNome=lista=>lista.find(x=>semAcento(x.nome).length>=3&&t.includes(semAcento(x.nome)))
+    ||lista.find(x=>semAcento(x.nome).includes(semAcento(n.banco||'')))||lista[0];
   const alvo=entrada?porNome(cfg.contas):credito?(porNome(cfg.cartoes)||porNome(cfg.contas)):porNome(cfg.contas);
   const desc=nomeNaNotif(n);
   return {t:entrada?'r':'d', pg:(alvo||{}).id||'', desc,
@@ -1697,6 +1703,8 @@ function nomeNaNotif(n){
   const pega=re=>{const m=t.match(re);return m?m[1]:''};
   let nome=pega(/\bem\s+([^,.;]{3,40})/i)||pega(/\bpara\s+([^,.;]{3,40})/i)||pega(/\bde\s+([^,.;]{3,40})/i)||t;
   const lixo='de|do|da|dos|das|em|no|na|nos|nas|para|pra|com|a|o';
+  // "em CAFETERIA aprovada" termina com o verbo do banco, não com o nome
+  t=t.replace(/\s+(foi\s+)?(aprovad[ao]|realizad[ao]|efetuad[ao]|confirmad[ao]|conclu[íi]d[ao]|com sucesso)\b/gi,' ');
   nome=nome.replace(/^(compra|pagamento|d[ée]bito|cr[ée]dito|pix|transfer[êe]ncia|aprovad[ao]|conta)\s+/gi,'')
            .replace(/\s{2,}/g,' ').trim()
            .replace(new RegExp('^(?:(?:'+lixo+')\\s+|[-–·:]\\s*)+','i'),'').trim()   // sobras do começo
