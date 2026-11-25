@@ -138,6 +138,9 @@ o mesmo movimento, não que esteja igual: reenviar um comprovante depois
 de o app aprender a lê-lo conserta o lançamento anterior em vez de virar
 um segundo.
 
+"Pic Pay" no app e "PICPAY" no comprovante são o mesmo nome: o espaço é
+escolha de quem escreveu, e a comparação o ignora.
+
 Uma conta pode ter nome genérico no app — "Conta" —, e nesse caso o
 comprovante nunca a encontra pelo nome: ele escreve o nome da
 instituição. O banco conectado tem nome próprio e já aponta para a
