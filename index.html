@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v91 — 25/11';
+const VERSAO='v92 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1733,19 +1733,35 @@ function leNotif(n){
   // num comprovante com as duas pontas rotuladas, o verbo do título não diz
   // de quem é o documento — e quando as duas contas são minhas, nada no
   // texto diz, menos a marca do banco que o emitiu, impressa no alto
+  // uma conta pode ter nome genérico no app — "Conta" —, e aí o comprovante
+  // nunca a encontra pelo nome. O banco a que ela está ligada tem nome
+  // próprio, e é esse que o comprovante escreve
+  const FRACA=/^(banco|conta|contas|cartao|credito|debito|pagamento|pagamentos|instituicao|s\.?a|ltda)$/;
+  const quaisEm=txt=>{
+    const achados=[];
+    cfg.contas.concat(cfg.cartoes).forEach(x=>{
+      if(!generico(x)&&semAcento(x.nome).length>=3&&txt.includes(semAcento(x.nome)))achados.push(x);
+    });
+    (cfg.bancos||[]).forEach(b=>{
+      const nb=semAcento(b.nome||'');
+      const bate=nb.length>=3&&(txt.includes(nb)
+        ||nb.split(/\s+/).some(w=>w.length>=4&&!FRACA.test(w)&&txt.includes(w)));
+      if(!bate)return;
+      const ids=Object.values(b.mapa||{});
+      const alvo=cfg.contas.find(c=>ids.includes(c.id))||cfg.cartoes.find(c=>ids.includes(c.id));
+      if(alvo&&!achados.some(y=>y.id===alvo.id))achados.push(alvo);
+    });
+    return achados;
+  };
   const pc=partesComp((n.titulo||'')+'\n'+(n.texto||''));
   const comprov=!!pc;
   const secR=pc?semAcento(pc.R.join(' ')):'', secP=pc?semAcento(pc.P.join(' ')):'';
-  const minhaEm=sec=>cfg.contas.concat(cfg.cartoes).find(x=>!generico(x)
-    &&semAcento(x.nome).length>=3&&sec.includes(semAcento(x.nome)));
+  const minhaEm=sec=>quaisEm(sec)[0]||null;
   // o banco que assina o documento é o que aparece fora das duas pontas, no
   // nome do alto ou no rodapé — e só vale se for um só
   const emitente=(()=>{
     if(!pc)return null;
-    const meus=cfg.contas.concat(cfg.cartoes).filter(x=>!generico(x)&&semAcento(x.nome).length>=3);
-    const bate=meus.filter(x=>pc.fora.includes(semAcento(x.nome))
-      ||semAcento(x.nome).split(/\s+/).some(w=>w.length>=4
-        &&!/^(banco|conta|cartao|credito|debito|pagamento)$/.test(w)&&pc.fora.includes(w)));
+    const bate=quaisEm(pc.fora);
     return bate.length===1?bate[0]:null;
   })();
   const dono=comprov?(()=>{
@@ -1769,7 +1785,7 @@ function leNotif(n){
     const marca=entrada?/\b(destinatario|recebedor|favorecido)\b/:/\b(pagador|remetente|origem)\b/;
     const m=t.match(marca);return m?t.slice(m.index+m[0].length):'';
   })();
-  const noLado=lista=>lado?lista.find(x=>!generico(x)&&semAcento(x.nome).length>=3&&lado.includes(semAcento(x.nome))):null;
+  const noLado=lista=>lado?quaisEm(lado).find(x=>lista.some(y=>y.id===x.id))||null:null;
   // achar pelo nome é uma coisa; cair na primeira conta da lista é outra, e
   // só a primeira dá para lançar sem perguntar
   const firme=lista=>noLado(lista)
@@ -1783,9 +1799,12 @@ function leNotif(n){
   const guardado=(cfg.destNotif||{})[chave];
   const valido=guardado&&(conta(guardado)||cartao(guardado));
   const busca=f=>entrada?f(cfg.contas):credito?(f(cfg.cartoes)||f(cfg.contas)):f(cfg.contas);
-  const alvo=valido?{id:guardado}:busca(porNome);
-  // o destino é certo quando foi escolhido antes ou quando o aviso o nomeia
-  const certo=!ambiguo&&!semLados&&(!!valido||!!busca(firme));
+  // no comprovante, a ponta que é minha está escrita: vale mais que o
+  // destino que aquele banco costuma ter
+  const alvo=dono?dono.x:valido?{id:guardado}:busca(porNome);
+  // o destino é certo quando está no documento, foi escolhido antes, ou o
+  // aviso nomeia a conta
+  const certo=!ambiguo&&!semLados&&(!!dono||!!valido||!!busca(firme));
   const desc=(comprov&&nomeNaSecao(entrada?pc.P:pc.R))||nomeNaNotif(n,entrada);
   // "Henrique Souza da Costa" no extrato parece um gasto com alguém; o que
   // aconteceu foi um Pix dele para você, e a direção importa mais que o nome

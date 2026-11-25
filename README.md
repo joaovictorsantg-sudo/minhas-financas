@@ -138,6 +138,11 @@ o mesmo movimento, não que esteja igual: reenviar um comprovante depois
 de o app aprender a lê-lo conserta o lançamento anterior em vez de virar
 um segundo.
 
+Uma conta pode ter nome genérico no app — "Conta" —, e nesse caso o
+comprovante nunca a encontra pelo nome: ele escreve o nome da
+instituição. O banco conectado tem nome próprio e já aponta para a
+conta, e é por ele que ela é reconhecida.
+
 Cada banco rotula o comprovante do seu jeito — o Inter escreve "Quem
 recebeu" e "Quem pagou", o PicPay escreve "Para" e "De" —, mas a forma é
 a mesma: um rótulo e, abaixo dele, aquela ponta inteira, até o próximo
