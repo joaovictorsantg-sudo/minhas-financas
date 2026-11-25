@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v68 — 25/11';
+const VERSAO='v69 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1694,6 +1694,15 @@ function leNotif(n){
 // O que interessa na notificação é o estabelecimento, não a frase do banco:
 // "Compra aprovada de R$ 32,90 em BURGER KING no cartão final 1364" é "BURGER KING".
 function nomeNaNotif(n){
+  // A carteira põe o estabelecimento no título e deixa o texto só com valor e
+  // cartão ("TRANSP COLET*Transp. E" / "R$ 6,13 com Banco Inter Gold ••1364").
+  // O banco faz o contrário: título genérico, nome no texto.
+  const tit=(n.titulo||'').trim();
+  const generico=/^(compra|pagamento|pix|transfer[êe]ncia|d[ée]bito|cr[ée]dito|dep[óo]sito|estorno|aviso|promo|lembrete|fatura|sua compra|voc[êe])/i;
+  // algumas carteiras põem o nome do cartão no título: isso não é loja
+  const meuNome=cfg.cartoes.concat(cfg.contas).some(x=>semAcento(x.nome)===semAcento(tit));
+  if(tit.length>=3&&!meuNome&&!/R\$/.test(tit)&&!generico.test(semAcento(tit)))
+    return limpaDesc(tit.replace(/\s*\*\s*/g,' ').replace(/\s{2,}/g,' ').trim())||tit;
   let t=' '+(n.texto||n.titulo||'')+' ';
   t=t.replace(/R\$\s*[\d.,]+/g,' ')
      .replace(/\bcart[ãa]o\s*(de\s*cr[ée]dito\s*)?(final\s*)?\d*/gi,' ')
