@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v82 — 25/11';
+const VERSAO='v83 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1694,9 +1694,13 @@ function leNotif(n){
   // "Quem recebeu" é o rótulo de um campo, não o sentido do dinheiro: num
   // comprovante os dois lados aparecem, e quem decide é o que está no alto
   const tDir=t.replace(/quem (recebeu|pagou)|recebedor|pagador|destinatario|remetente|beneficiario|favorecido/g,' ');
-  const entrada=!/(enviad|enviei|voce (enviou|pagou|transferiu)|pagamento (realizado|efetuado)|transferencia enviada)/.test(tDir)
+  const base=!/(enviad|enviei|voce (enviou|pagou|transferiu)|pagamento (realizado|efetuado)|transferencia enviada)/.test(tDir)
     &&/(recebeu|recebido|entrou|credito em conta|transferencia recebida|deposito|estorno)/.test(tDir)
     &&!/compra|aprovad|debitad/.test(tDir);
+  // "Pix recebido devolvido" é dinheiro saindo: a devolução desfaz o que o
+  // verbo antes dela diz, e sem isso as duas pontas trocam de lado
+  const devolveu=/devolvid|devoluc/.test(tDir)&&/(recebid|recebeu|enviad|enviou)/.test(tDir);
+  const entrada=devolveu?!base:base;
   // a carteira do celular avisa a compra sem dizer o banco, e aproximação é
   // quase sempre crédito
   const carteira=/wallet|carteira|google pay|samsung pay/.test(semAcento(n.banco||''));

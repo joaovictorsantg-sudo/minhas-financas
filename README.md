@@ -135,7 +135,8 @@ Nenhum banco compartilha esse comprovante como texto — o Inter manda
 imagem, o PicPay um PDF desenhado —, então o aplicativo lê as letras da
 figura ali mesmo, sem internet. Num comprovante as duas pontas vêm
 rotuladas e o sentido está no alto: "quem recebeu" interessa quando o
-dinheiro saiu, "quem pagou" quando entrou.
+dinheiro saiu, "quem pagou" quando entrou. Devolução desfaz o verbo que
+vem antes dela — "Pix recebido devolvido" é dinheiro saindo.
 
 Lançar sem revisar vale para o aviso que diz de onde o dinheiro saiu —
 pelo nome da conta no texto, ou pela instituição do lado dele no
