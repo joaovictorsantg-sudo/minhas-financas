@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v87 — 25/11';
+const VERSAO='v88 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1696,11 +1696,14 @@ function notifs(){
 function leNotif(n){
   const t=semAcento((n.titulo||'')+' '+(n.texto||''));
   // o comprovante é compartilhado depois, e traz a data de quando aconteceu
-  const dm=((n.titulo||'')+' '+(n.texto||'')).match(/\b(\d{2})\/(\d{2})\/(\d{4})\b/);
-  const quandoISO=dm?`${dm[3]}-${dm[2]}-${dm[1]}`:'';
+  const bruto=(n.titulo||'')+' '+(n.texto||'');
+  const MES={jan:'01',fev:'02',mar:'03',abr:'04',mai:'05',jun:'06',jul:'07',ago:'08',set:'09',out:'10',nov:'11',dez:'12'};
+  const dm=bruto.match(/\b(\d{1,2})[\/\s-]+(\d{2}|[a-zç]{3,9})[\/\s-]+(\d{4})\b/i);
+  const mm=dm?(/^\d+$/.test(dm[2])?dm[2].padStart(2,'0'):MES[semAcento(dm[2]).slice(0,3)]):'';
+  const quandoISO=dm&&mm?`${dm[3]}-${mm}-${dm[1].padStart(2,'0')}`:'';
   // compartilhar o mesmo comprovante duas vezes é a coisa mais fácil do
   // mundo; o identificador da transação diz que é a mesma
-  const idm=((n.titulo||'')+' '+(n.texto||'')).match(/\b(?:id|e2e)[^\n:]{0,20}:?\s*([A-Za-z0-9]{20,40})\b/i);
+  const idm=bruto.match(/\b(?:id|e2e)[^\n:]{0,20}:?\s*([A-Za-z0-9]{20,40})\b/i);
   const idTx=idm?idm[1]:'';
   // "Quem recebeu" é o rótulo de um campo, não o sentido do dinheiro: num
   // comprovante os dois lados aparecem, e quem decide é o que está no alto
@@ -1730,19 +1733,20 @@ function leNotif(n){
   // num comprovante com as duas pontas rotuladas, o verbo do título não diz
   // de quem é o documento — e quando as duas contas são minhas, nada no
   // texto diz, menos a marca do banco que o emitiu, impressa no alto
-  // as duas seções começam com o mesmo "Nome", então o corte é pelo rótulo
-  // seguinte e não pelo que elas contêm
-  const acha=re=>{const m=t.match(re);return m?{i:m.index,fim:m.index+m[0].length}:null};
-  const mR=acha(/\bquem recebeu\b/), mP=acha(/\bquem pagou\b/);
-  const ate=(m,outro)=>!m?'':t.slice(m.fim, outro&&outro.i>m.i?outro.i:undefined);
-  const secR=ate(mR,mP), secP=ate(mP,mR);
-  const comprov=!!(secR&&secP);
+  const pc=partesComp((n.titulo||'')+'\n'+(n.texto||''));
+  const comprov=!!pc;
+  const secR=pc?semAcento(pc.R.join(' ')):'', secP=pc?semAcento(pc.P.join(' ')):'';
   const minhaEm=sec=>cfg.contas.concat(cfg.cartoes).find(x=>!generico(x)
     &&semAcento(x.nome).length>=3&&sec.includes(semAcento(x.nome)));
-  const emitente=(()=>{ // a marca impressa no alto do comprovante
-    const alto=t.split('\n').slice(0,3).join(' ');
-    return cfg.contas.concat(cfg.cartoes).find(x=>!generico(x)&&semAcento(x.nome).split(/\s+/)
-      .some(w=>w.length>=4&&!/^(banco|conta|cartao|credito|debito)$/.test(w)&&alto.includes(w)));
+  // o banco que assina o documento é o que aparece fora das duas pontas, no
+  // nome do alto ou no rodapé — e só vale se for um só
+  const emitente=(()=>{
+    if(!pc)return null;
+    const meus=cfg.contas.concat(cfg.cartoes).filter(x=>!generico(x)&&semAcento(x.nome).length>=3);
+    const bate=meus.filter(x=>pc.fora.includes(semAcento(x.nome))
+      ||semAcento(x.nome).split(/\s+/).some(w=>w.length>=4
+        &&!/^(banco|conta|cartao|credito|debito|pagamento)$/.test(w)&&pc.fora.includes(w)));
+    return bate.length===1?bate[0]:null;
   })();
   const dono=comprov?(()=>{
     const r=minhaEm(secR), p=minhaEm(secP);
@@ -1782,7 +1786,7 @@ function leNotif(n){
   const alvo=valido?{id:guardado}:busca(porNome);
   // o destino é certo quando foi escolhido antes ou quando o aviso o nomeia
   const certo=!ambiguo&&!semLados&&(!!valido||!!busca(firme));
-  const desc=nomeNaNotif(n,entrada);
+  const desc=(comprov&&nomeNaSecao(entrada?pc.P:pc.R))||nomeNaNotif(n,entrada);
   // "Henrique Souza da Costa" no extrato parece um gasto com alguém; o que
   // aconteceu foi um Pix dele para você, e a direção importa mais que o nome
   const pix=/\bpix\b|transferencia/.test(t);
@@ -1797,6 +1801,47 @@ function leNotif(n){
 const ateORotulo=v=>String(v||'')
   .split(/\s+(?:cpf|cnpj|data|hora|institui|ag[êe]ncia|conta|valor|banco|chave|origem|destino|tipo|e-?mail|telefone|id\b)/i)[0]
   .replace(/\s{2,}/g,' ').trim();
+// Um comprovante é uma lista de campos, e cada banco a rotula do seu jeito:
+// o Inter escreve "Quem recebeu" e "Quem pagou", o PicPay escreve "Para" e
+// "De". O que não muda é a forma: um rótulo, e abaixo dele quem é aquela
+// ponta — nome, documento, instituição — até o próximo assunto.
+const ROT_R=/^(quem recebeu|destinatario|recebedor|favorecido|beneficiario|para)$/;
+const ROT_P=/^(quem pagou|pagador|remetente|origem|de)$/;
+// agência, conta e chave descrevem a ponta: quem encerra a seção é o
+// assunto seguinte do documento
+const FIM_SEC=/^(id d[ao]|sobre |dados banc|ouvidoria|sac\b|cnpj n|canais |comprovante|valor$|data d)/;
+function partesComp(bruto){
+  const linhas=String(bruto||'').split('\n').map(x=>x.trim()).filter(Boolean);
+  const rot=linhas.map(x=>semAcento(x).replace(/[:.]+$/,''));
+  const acha=re=>rot.findIndex(x=>re.test(x));
+  const iR=acha(ROT_R), iP=acha(ROT_P);
+  if(iR<0||iP<0)return null;
+  const secao=i=>{
+    const out=[];
+    for(let j=i+1;j<linhas.length;j++){
+      if(ROT_R.test(rot[j])||ROT_P.test(rot[j])||FIM_SEC.test(rot[j]))break;
+      out.push(linhas[j]);
+    }
+    return out;
+  };
+  const R=secao(iR), P=secao(iP);
+  if(!R.length||!P.length)return null;
+  // o que sobra fora das duas pontas é o documento falando de si: o nome no
+  // alto, o rodapé da ouvidoria. É ali que está de quem ele é.
+  const dentro=new Set(R.concat(P));
+  const fora=semAcento(linhas.filter(x=>!dentro.has(x)).join(' '));
+  return {R,P,fora};
+}
+// dentro da seção, o nome vem primeiro e vai até o documento ou a instituição
+const nomeNaSecao=sec=>{
+  const out=[];
+  for(const l of sec){
+    const c=semAcento(l);
+    if(/^\*{2,}|\d{3}[.,]\d{3}|^cpf|^cnpj|^institui|^banco\b|^ag\b|^agencia|^conta\b|^cc\b/.test(c))break;
+    out.push(l.replace(/^\s*nome\s*:?\s*/i,'').trim());
+  }
+  return out.filter(Boolean).join(' ').replace(/\s{2,}/g,' ').trim();
+};
 function nomeNaNotif(n,entrada){
   // A carteira põe o estabelecimento no título e deixa o texto só com valor e
   // cartão ("TRANSP COLET*Transp. E" / "R$ 6,13 com Banco Inter Gold ••1364").

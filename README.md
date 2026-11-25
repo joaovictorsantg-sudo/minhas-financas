@@ -135,6 +135,14 @@ Compartilhar o mesmo comprovante duas vezes é fácil, e o identificador
 da transação que ele traz diz que é o mesmo movimento. Sem esse
 identificador, valem conta, dia, valor e lado.
 
+Cada banco rotula o comprovante do seu jeito — o Inter escreve "Quem
+recebeu" e "Quem pagou", o PicPay escreve "Para" e "De" —, mas a forma é
+a mesma: um rótulo e, abaixo dele, aquela ponta inteira, até o próximo
+assunto do documento. A leitura é por essa forma, não pelas palavras de
+um banco. O que sobra fora das duas pontas é o documento falando de si,
+e é ali, no nome do alto ou no rodapé da ouvidoria, que está de quem ele
+é.
+
 O comprovante tem duas colunas, rótulo à esquerda e valor à direita, e
 lido bloco a bloco sai uma coluna inteira e depois a outra: "Instituição"
 deixa de ter ao lado o banco a que pertence. As linhas são refeitas pela
