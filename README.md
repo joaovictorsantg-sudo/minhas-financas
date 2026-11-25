@@ -123,6 +123,11 @@ app sob a barra de status e a de gestos, então a janela inclui o espaço
 delas: o layout reserva esse espaço pelas medidas que o sistema informa,
 com um mínimo próprio para quando ele informa zero.
 
+O extrato filtra por três eixos ao mesmo tempo: o que (gasto, entrada,
+aporte), onde (débito, crédito ou uma conta específica) e categoria. Os
+filtros ativos ficam visíveis como etiquetas, cada uma com o seu próprio
+desfazer, para que ninguém leia uma lista parcial achando que é tudo.
+
 Regras de categoria do próprio usuário vêm antes das do app e ficam no
 aparelho: um Pix para uma pessoa pode ser a mensalidade da faculdade, e
 isso ninguém adivinha pela descrição. A regra casa por texto, ignorando

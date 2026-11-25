@@ -130,6 +130,8 @@ h2 a{font-size:13px;font-weight:500;color:var(--acc);cursor:pointer;text-decorat
 .btn.s{width:auto;padding:8px 13px;font-size:13.5px;border-radius:10px}
 .acts{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
 .acts .btn{flex:1;min-width:92px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 16px}
+.chips .btn{width:auto;flex:0 0 auto;padding:9px 13px;font-size:14px;min-width:0}
 a.btn{display:block;text-align:center;text-decoration:none;box-sizing:border-box}
 .acts.fim{position:sticky;bottom:0;z-index:2;background:var(--base);margin-top:18px;
   padding:12px 0 calc(6px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line)}
@@ -211,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v62 — 25/11';
+const VERSAO='v63 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -265,7 +267,7 @@ const ICO={
 const ABAS=[['inicio','Início'],['lanc','Extrato'],['cartoes','Cartões'],['investir','Investir'],['planos','Planos']];
 
 let cfg=clone(DEF), meses={};
-const st={tab:'inicio',mes:mk(hoje()),filtro:''};
+const st={tab:'inicio',mes:mk(hoje()),filtro:'',fTipo:'',fOnde:''};
 
 const KEY='financas-joao-v3', TKKEY='brapi-token';
 function cache(){try{localStorage.setItem(KEY,JSON.stringify({cfg,meses}))}catch(e){toast('Sem espaço para salvar neste aparelho')}}
@@ -605,12 +607,24 @@ inicio(){
   return h;
 },
 lanc(){
-  let itens=doMes(st.mes);if(st.filtro)itens=itens.filter(({tx})=>tx.cat===st.filtro);
+  let itens=doMes(st.mes);
+  if(st.filtro)itens=itens.filter(({tx})=>tx.cat===st.filtro);
+  if(st.fTipo)itens=itens.filter(({tx})=>tx.t===st.fTipo);
+  if(st.fOnde)itens=itens.filter(({tx})=>st.fOnde==='_ct'?!!conta(tx.pg)
+    :st.fOnde==='_cd'?!!cartao(tx.pg):tx.pg===st.fOnde);
   let h=mnav();
-  if(st.filtro)h+=`<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><span class="tag">${catInfo(st.filtro).emoji} ${esc(catInfo(st.filtro).nome)}</span><button class="btn g s" onclick="st.filtro='';render()">Ver tudo</button></div>`;
+  const ativos=[];
+  if(st.fTipo)ativos.push([{d:'Gastos',r:'Entradas',a:'Aportes'}[st.fTipo],"st.fTipo=''"]);
+  if(st.fOnde)ativos.push([st.fOnde==='_ct'?'No débito':st.fOnde==='_cd'?'No crédito'
+    :((conta(st.fOnde)||cartao(st.fOnde)||{}).nome||'—'),"st.fOnde=''"]);
+  if(st.filtro)ativos.push([catInfo(st.filtro).emoji+' '+catInfo(st.filtro).nome,"st.filtro=''"]);
+  h+=`<div class="chips">${ativos.map(([rot,zera])=>
+    `<button class="btn s" onclick="${zera};render()">${esc(rot)} ✕</button>`).join('')}
+    <button class="btn g s" onclick="formFiltro()">${ativos.length?'Mudar filtro':'Filtrar'}</button>
+    ${ativos.length>1?`<button class="btn g s" onclick="limpaFiltros();render()">Limpar</button>`:''}</div>`;
   const btImp=`<div class="acts"><button class="btn g" onclick="document.getElementById('ext').click()">Importar extrato do banco</button></div>
   <input type="file" id="ext" style="display:none" onchange="lerExtrato(this)">`;
-  if(!itens.length)return h+`<div class="grp"><div class="blank">Nada lançado em ${nomeMes(st.mes)}.<div style="margin-top:16px"><button class="btn s" onclick="novo('d')">Lançar um gasto</button></div></div></div>`+btImp;
+  if(!itens.length)return h+`<div class="grp"><div class="blank">${ativos.length?'Nada em '+nomeMes(st.mes)+' com esse filtro.<div style="margin-top:16px"><button class="btn s" onclick="limpaFiltros();render()">Limpar o filtro</button></div>':'Nada lançado em '+nomeMes(st.mes)+'.<div style="margin-top:16px"><button class="btn s" onclick="novo(\'d\')">Lançar um gasto</button></div>'}</div></div>`+btImp;
   const tot=r2(itens.reduce((s,{tx,p})=>s+(tx.t==='r'?p.v:-p.v),0));
   h+=`<div class="grp"><div class="pad" style="display:flex;align-items:baseline;padding-bottom:16px"><span class="lbl">${itens.length} ${itens.length===1?'lançamento':'lançamentos'}</span><span style="flex:1"></span><span class="vmid ${tot<0?'':'up'}">${money(tot)}</span></div></div>
   <div class="grp"><div class="rows">`+itens.map(linha).join('')+`</div></div>`+btImp;
@@ -846,7 +860,7 @@ function render(){
   $('#main').innerHTML=V[st.tab]();
   $('#nav').innerHTML=ABAS.map(([k,n])=>`<button class="${k===st.tab?'on':''}" onclick="ir('${k}')" aria-label="${n}"><svg viewBox="0 0 24 24">${ICO[k]}</svg>${n}</button>`).join('');
 }
-function ir(t){st.tab=t;if(t!=='lanc')st.filtro='';render();const m=$('#main');if(m)m.scrollTop=0}
+function ir(t){st.tab=t;if(t!=='lanc')limpaFiltros();render();const m=$('#main');if(m)m.scrollTop=0}
 function mudaMes(n){st.mes=addM(st.mes,n);render()}
 $('#main').addEventListener('scroll',function(){$('#hd').classList.toggle('stuck',this.scrollTop>6)},{passive:true});
 let tt;function toast(m){const e=$('#toast');e.textContent=m;e.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>e.classList.remove('on'),2600)}
@@ -1639,6 +1653,34 @@ function apagaPagtos(){
   Object.keys(meses).forEach(k=>{meses[k]=meses[k].filter(t=>!ids.has(t.id))});
   cache();fechar();render();toast(ids.size+(ids.size===1?' lançamento apagado':' lançamentos apagados'));
 }
+function formFiltro(){
+  const chip=(on,rot,acao)=>`<button class="btn ${on?'':'g'} s" onclick="${acao}">${rot}</button>`;
+  const n=(()=>{let i=doMes(st.mes);
+    if(st.filtro)i=i.filter(({tx})=>tx.cat===st.filtro);
+    if(st.fTipo)i=i.filter(({tx})=>tx.t===st.fTipo);
+    if(st.fOnde)i=i.filter(({tx})=>st.fOnde==='_ct'?!!conta(tx.pg):st.fOnde==='_cd'?!!cartao(tx.pg):tx.pg===st.fOnde);
+    return i.length})();
+  abrir(cab('Filtrar '+nomeMes(st.mes))+
+  `<label>O que</label><div class="chips">
+    ${chip(!st.fTipo,'Tudo',"poeF('fTipo','')")}
+    ${chip(st.fTipo==='d','Gastos',"poeF('fTipo','d')")}
+    ${chip(st.fTipo==='r','Entradas',"poeF('fTipo','r')")}
+    ${chip(st.fTipo==='a','Aportes',"poeF('fTipo','a')")}</div>
+  <label>Onde</label><div class="chips">
+    ${chip(!st.fOnde,'Tudo',"poeF('fOnde','')")}
+    ${chip(st.fOnde==='_ct','Débito',"poeF('fOnde','_ct')")}
+    ${chip(st.fOnde==='_cd','Crédito',"poeF('fOnde','_cd')")}
+    ${cfg.contas.map(c=>chip(st.fOnde===c.id,(c.emoji||'🏦')+' '+esc(c.nome),`poeF('fOnde','${c.id}')`)).join('')}
+    ${cfg.cartoes.map(c=>chip(st.fOnde===c.id,'💳 '+esc(c.nome),`poeF('fOnde','${c.id}')`)).join('')}</div>
+  <label>Categoria</label><div class="chips">
+    ${chip(!st.filtro,'Todas',"poeF('filtro','')")}
+    ${cfg.categorias.map(c=>chip(st.filtro===c.id,c.emoji+' '+esc(c.nome),`poeF('filtro','${c.id}')`)).join('')}</div>
+  <p class="hint" style="padding-left:0">${n} ${n===1?'lançamento':'lançamentos'} com esse filtro.</p>
+  <div class="acts"><button class="btn g" onclick="limpaFiltros();formFiltro()">Limpar tudo</button>
+  <button class="btn" onclick="fechar();render()">Ver</button></div>`);
+}
+function poeF(k,v){st[k]=v;formFiltro()}
+function limpaFiltros(){st.fTipo='';st.fOnde='';st.filtro=''}
 function formOrfaos(){
   const o=orfaos(); if(!o.length)return;
   const ent=o.filter(t=>t.t==='r').length;
