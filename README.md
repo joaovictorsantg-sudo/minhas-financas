@@ -131,6 +131,11 @@ processá-la. Pix enviado não gera notificação em banco nenhum, e é o único
 assim. Para ele, o app é um destino de compartilhamento: o comprovante
 que o banco oferece depois do envio traz valor, data e para quem foi.
 
+O comprovante tem duas colunas, rótulo à esquerda e valor à direita, e
+lido bloco a bloco sai uma coluna inteira e depois a outra: "Instituição"
+deixa de ter ao lado o banco a que pertence. As linhas são refeitas pela
+altura em que estão na figura, e cada rótulo volta a encontrar seu valor.
+
 Nenhum banco compartilha esse comprovante como texto — o Inter manda
 imagem, o PicPay um PDF desenhado —, então o aplicativo lê as letras da
 figura ali mesmo, sem internet. Num comprovante as duas pontas vêm

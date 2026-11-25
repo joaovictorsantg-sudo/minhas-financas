@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v83 — 25/11';
+const VERSAO='v84 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -238,7 +238,7 @@ const r2=v=>Math.round(v*100)/100;
 const r4=v=>Math.round(v*10000)/10000;
 
 const DEF={
-  regras:[], destNotif:{}, notifDireto:true, salario:0, metaInvest:0, cotAt:'', cotTs:0, salarioQuando:'pu', nome:'', wkUrl:'', bancos:[], syncAuto:true, syncDireto:false, syncTs:0,
+  regras:[], destNotif:{}, notifDireto:true, ultComp:'', salario:0, metaInvest:0, cotAt:'', cotTs:0, salarioQuando:'pu', nome:'', wkUrl:'', bancos:[], syncAuto:true, syncDireto:false, syncTs:0,
   contas:[
     {id:'conta',emoji:'🏦',nome:'Conta',saldo:0},
     {id:'dinheiro',emoji:'💵',nome:'Dinheiro',saldo:0}
@@ -1676,14 +1676,21 @@ function apagaPagtos(){
 // O aparelho só aparece quando o app é o APK; no navegador nada disto existe.
 // A parte web se atualiza sozinha; o APK só muda quando mexo no código
 // nativo. Sem isto não haveria como saber que chegou um APK novo.
-const APK='1.4';
+const APK='1.5';
 const APK_LINK='https://github.com/joaovictorsantg-sudo/minhas-financas/releases/download/apk/minhas-financas.apk';
 const apkVelho=()=>{try{return noAparelho()&&typeof Aparelho.versaoApp==='function'&&Aparelho.versaoApp()!==APK}catch(e){return false}};
 const noAparelho=()=>{try{return typeof Aparelho!=='undefined'&&!!Aparelho&&typeof Aparelho.pendentes==='function'}catch(e){return false}};
 const podeOuvir=()=>{try{return noAparelho()&&Aparelho.temPermissao()}catch(e){return false}};
 function notifs(){
   if(!noAparelho())return [];
-  try{ return (JSON.parse(Aparelho.pendentes()||'[]')||[]).filter(n=>+n.valor>0) }catch(e){ return [] }
+  try{
+    const ns=(JSON.parse(Aparelho.pendentes()||'[]')||[]).filter(n=>+n.valor>0);
+    // o comprovante some da caixa assim que é lançado, e quando ele é lido
+    // errado o texto é a única pista de onde a leitura se perdeu
+    const c=ns.filter(n=>/comprovante/i.test(n.banco||'')).pop();
+    if(c&&c.texto&&c.texto!==cfg.ultComp){cfg.ultComp=c.texto;cache()}
+    return ns;
+  }catch(e){ return [] }
 }
 // o que a notificação parece ser: entrada, gasto no crédito ou gasto na conta
 function leNotif(n){
@@ -2120,6 +2127,11 @@ function formCartao(id){
   ${id?'':`<label>Fatura em aberto hoje, se já tiver</label><input id="cc_ab" inputmode="decimal" placeholder="0,00">
   <p class="hint" style="padding-left:0">O que você já gastou neste cartão antes de começar a usar o app. Pode deixar vazio.</p>`}
   <div class="acts fim">${id?`<button class="btn d" onclick="delCartao('${id}')">Excluir</button>`:''}<button class="btn" onclick="salvarCartao('${id||''}')">Salvar</button></div>`);
+}
+function verComp(){
+  abrir(cab('Último comprovante lido')+
+   `<pre style="white-space:pre-wrap;font:12px/1.5 ui-monospace,monospace;background:var(--card2);padding:12px;border-radius:10px;overflow-x:auto">${esc(cfg.ultComp||'')}</pre>
+    <div class="acts fim"><button class="btn" onclick="fechar()">Fechar</button></div>`);
 }
 function voltaAoBanco(id){const c=cartao(id);if(!c)return;delete c.doBanco;salvarCfg();formCartao(id);toast('O banco volta a atualizar este cartão')}
 function salvarCartao(id){
@@ -2669,6 +2681,10 @@ function formAjustes(){
     <button class="ick" style="${cfg.notifDireto?'':'background:none;border-color:var(--line2)'}">${cfg.notifDireto?'✓':''}</button>
     <div class="imid"><div class="t1">Lançar sem revisar</div>
     <div class="t2">Entra direto quando o app abre, mas só quando o aviso diz de qual conta ou cartão saiu — ou quando você já escolheu o destino daquele banco uma vez. O que ficar em dúvida continua esperando.</div></div></div>`:''}`:''}
+
+  ${cfg.ultComp?`<div class="ilin" style="border-bottom:0" onclick="verComp()">
+    <div class="imid"><div class="t1">Ver o último comprovante lido</div>
+    <div class="t2">O texto que o app enxergou na figura. Serve para entender uma leitura que saiu errada.</div></div><div class="iarr">›</div></div>`:''}
 
   <h4>Minhas regras de categoria</h4><p class="hint" style="padding-left:0">${(cfg.regras||[]).length?(cfg.regras.length===1?'1 regra sua':cfg.regras.length+' regras suas')+'. O app usa elas antes das próprias.':'Ensine o app a reconhecer o que só você sabe, como um Pix que é sempre a mesma conta.'}</p>
   <div class="acts"><button class="btn g" onclick="formRegras()">Ver e criar regras</button></div>

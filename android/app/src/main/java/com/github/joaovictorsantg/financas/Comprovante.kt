@@ -53,13 +53,38 @@ object Comprovante {
       .process(InputImage.fromBitmap(bmp, 0))
       .addOnSuccessListener { lido ->
         bmp.recycle()
-        pronto(guardar(ctx, "Comprovante", lido.text))
+        pronto(guardar(ctx, "Comprovante", emLinhas(lido)))
       }
       .addOnFailureListener {
         bmp.recycle()
         Toast.makeText(ctx, "Não consegui ler o comprovante", Toast.LENGTH_SHORT).show()
         pronto(false)
       }
+  }
+
+  /**
+   * O comprovante tem duas colunas: rótulo à esquerda, valor à direita. Lido
+   * bloco a bloco, sai uma coluna inteira e depois a outra, e "Instituição"
+   * deixa de ter ao lado o banco a que pertence. Refazendo as linhas pela
+   * altura em que estão na figura, cada rótulo volta a encontrar seu valor.
+   */
+  private fun emLinhas(t: com.google.mlkit.vision.text.Text): String {
+    data class Peca(val y: Int, val x: Int, val alt: Int, val txt: String)
+    val pecas = t.textBlocks.flatMap { it.lines }.mapNotNull { l ->
+      l.boundingBox?.let { r -> Peca(r.centerY(), r.left, r.height(), l.text) }
+    }.sortedBy { it.y }
+
+    val linhas = mutableListOf<MutableList<Peca>>()
+    for (p in pecas) {
+      val atual = linhas.lastOrNull()
+      // mesma linha quando os centros quase coincidem; meia altura é folga
+      // bastante para letra de tamanhos diferentes lado a lado
+      val junto = atual != null && kotlin.math.abs(atual[0].y - p.y) <= maxOf(p.alt, atual[0].alt) / 2
+      if (junto) atual!!.add(p) else linhas.add(mutableListOf(p))
+    }
+    return linhas.joinToString("\n") { linha ->
+      linha.sortedBy { it.x }.joinToString(" ") { it.txt }
+    }
   }
 
   private fun doArquivo(ctx: Context, uri: Uri): Bitmap? =
