@@ -132,11 +132,10 @@ assim. Para ele, o app é um destino de compartilhamento: o comprovante
 que o banco oferece depois do envio traz valor, data e para quem foi.
 
 Compartilhar o mesmo comprovante duas vezes é fácil, e o identificador
-da transação que ele traz diz que é o mesmo movimento. Sem esse
-identificador, só o comprovante é comparado por conta, dia, valor e
-lado: a notificação sai da caixa quando é lançada e nunca volta, então
-dois avisos iguais são dois movimentos iguais — dois Pix de R$ 5 no
-mesmo dia acontecem. O identificador diz que é
+da transação que ele traz diz que é o mesmo movimento. Essa comparação é só do comprovante, com identificador ou sem: a
+notificação sai da caixa quando é lançada e nunca volta, então nada que
+venha dela é repetição — dois Pix de R$ 5 no mesmo dia acontecem, e um
+aviso pode trazer o código da transação sem por isso ser o mesmo aviso. O identificador diz que é
 o mesmo movimento, não que esteja igual: reenviar um comprovante depois
 de o app aprender a lê-lo conserta o lançamento anterior em vez de virar
 um segundo.
