@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v69 — 25/11';
+const VERSAO='v70 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1667,6 +1667,11 @@ function apagaPagtos(){
 }
 /* ---------- notificações do banco, quando rodando no app nativo ---------- */
 // O aparelho só aparece quando o app é o APK; no navegador nada disto existe.
+// A parte web se atualiza sozinha; o APK só muda quando mexo no código
+// nativo. Sem isto não haveria como saber que chegou um APK novo.
+const APK='1.1';
+const APK_LINK='https://github.com/joaovictorsantg-sudo/minhas-financas/releases/download/apk/minhas-financas.apk';
+const apkVelho=()=>{try{return noAparelho()&&typeof Aparelho.versaoApp==='function'&&Aparelho.versaoApp()!==APK}catch(e){return false}};
 const noAparelho=()=>{try{return typeof Aparelho!=='undefined'&&!!Aparelho&&typeof Aparelho.pendentes==='function'}catch(e){return false}};
 const podeOuvir=()=>{try{return noAparelho()&&Aparelho.temPermissao()}catch(e){return false}};
 function notifs(){
@@ -2517,6 +2522,7 @@ function formAjustes(){
   h+=`<button class="btn g s" onclick="addCat()" style="margin-top:6px">Adicionar categoria</button>
   <h4>Cotações</h4><p class="hint" style="padding-left:0">${getTk()?'Token da brapi salvo neste aparelho.':'Sem token. Só ITUB4, PETR4, VALE3 e MGLU3 atualizam sozinhas.'}</p>
   <button class="btn g s" onclick="formToken()">${getTk()?'Trocar token':'Colar token da brapi'}</button>
+  ${apkVelho()?`<div class="note" style="border-left-color:var(--warn)"><b>Tem uma versão nova do aplicativo</b>O site se atualiza sozinho, mas desta vez mudou a parte que fica no aparelho. Baixe e instale por cima — seus dados ficam. <a href="${APK_LINK}">Baixar o APK</a></div>`:''}
   ${noAparelho()?`<h4>Notificações do banco</h4>
   <p class="hint" style="padding-left:0">${podeOuvir()
     ? 'O app está recebendo as notificações dos seus bancos e guarda as que têm valor, para você lançar quando abrir. Elas ficam só neste aparelho.'

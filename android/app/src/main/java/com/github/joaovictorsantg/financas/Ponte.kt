@@ -27,6 +27,10 @@ class Ponte(private val ctx: Context) {
   @JavascriptInterface
   fun versao(): Int = 1
 
+  /** A versão deste APK, para a página avisar quando houver uma mais nova. */
+  @JavascriptInterface
+  fun versaoApp(): String = BuildConfig.VERSION_NAME
+
   /** As notificações de banco ainda não processadas, como JSON. */
   @JavascriptInterface
   fun pendentes(): String =
