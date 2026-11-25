@@ -139,7 +139,9 @@ de o app aprender a lê-lo conserta o lançamento anterior em vez de virar
 um segundo.
 
 "Pic Pay" no app e "PICPAY" no comprovante são o mesmo nome: o espaço é
-escolha de quem escreveu, e a comparação o ignora.
+escolha de quem escreveu, e a comparação o ignora. O nome inteiro é o que
+identifica; um pedaço dele vale só para o nome do banco, que é curto e
+próprio — "Mastercard" está no cartão de todo mundo.
 
 Uma conta pode ter nome genérico no app — "Conta" —, e nesse caso o
 comprovante nunca a encontra pelo nome: ele escreve o nome da

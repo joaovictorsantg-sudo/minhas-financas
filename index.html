@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v93 — 25/11';
+const VERSAO='v94 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1736,20 +1736,23 @@ function leNotif(n){
   // uma conta pode ter nome genérico no app — "Conta" —, e aí o comprovante
   // nunca a encontra pelo nome. O banco a que ela está ligada tem nome
   // próprio, e é esse que o comprovante escreve
-  const FRACA=/^(banco|conta|contas|cartao|credito|debito|pagamento|pagamentos|instituicao|s\.?a|ltda)$/;
+  // palavras que muitos cartões e bancos têm em comum não identificam nenhum
+  const FRACA=/^(banco|conta|contas|cartao|credito|debito|pagamento|pagamentos|instituicao|s\.?a|ltda|mastercard|visa|elo|hipercard|amex|gold|platinum|black|internacional|nacional|digital|prepago|principal|adicional)$/;
   // "Pic Pay" no app e "PICPAY" no comprovante são o mesmo nome: o espaço é
   // escolha de quem escreveu, não parte do nome
   const junta=x=>semAcento(x||'').replace(/[^a-z0-9]/g,'');
   const quaisEm=txt=>{
     const cru=junta(txt), achados=[];
-    const bate=nome=>{
+    // o nome inteiro identifica; um pedaço dele só quando é o do banco, que
+    // é curto e próprio — "Mastercard" aparece no cartão de todo mundo
+    const bate=(nome,porPedaco)=>{
       const n=semAcento(nome||''), j=junta(nome);
       return (n.length>=3&&txt.includes(n))||(j.length>=5&&cru.includes(j))
-        ||n.split(/\s+/).some(w=>w.length>=4&&!FRACA.test(w)&&txt.includes(w));
+        ||(porPedaco&&n.split(/\s+/).some(w=>w.length>=4&&!FRACA.test(w)&&txt.includes(w)));
     };
     cfg.contas.concat(cfg.cartoes).forEach(x=>{if(!generico(x)&&bate(x.nome))achados.push(x)});
     (cfg.bancos||[]).forEach(b=>{
-      if(!bate(b.nome))return;
+      if(!bate(b.nome,true))return;
       const ids=Object.values(b.mapa||{});
       const alvo=cfg.contas.find(c=>ids.includes(c.id))||cfg.cartoes.find(c=>ids.includes(c.id));
       if(alvo&&!achados.some(y=>y.id===alvo.id))achados.push(alvo);
