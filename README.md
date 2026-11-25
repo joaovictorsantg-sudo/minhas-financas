@@ -123,6 +123,13 @@ app sob a barra de status e a de gestos, então a janela inclui o espaço
 delas: o layout reserva esse espaço pelas medidas que o sistema informa,
 com um mínimo próprio para quando ele informa zero.
 
+Instalado como aplicativo Android — a pasta `android/`, compilada pelo
+GitHub a cada mudança — o app pode ler as notificações dos bancos, com a
+permissão que o Android pede uma vez. A compra no crédito aparece no
+instante em que o banco avisa, em vez de esperar o dia que ele leva para
+processá-la. A notificação é lida neste aparelho e descartada depois de
+virar lançamento; nada sai daqui.
+
 Gasto no crédito lançado à mão na hora da compra é reconhecido quando o
 banco enfim o entrega, dias depois e com outro nome: casam por cartão,
 valor e proximidade de data. O lançamento continua sendo o seu, com a

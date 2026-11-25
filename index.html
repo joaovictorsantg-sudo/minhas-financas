@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v64 — 25/11';
+const VERSAO='v65 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -588,6 +588,7 @@ inicio(){
   <div><span class="lbl">Investido</span><b class="up">${money(totalInvest())}</b></div>
   <div><span class="lbl">Cartões</span><b class="${totalCartoes()>0?'down':''}">${totalCartoes()>0?'−':''}${money(totalCartoes())}</b></div></div></div>`;
 
+  h+=avisaNotifs();
   const orf=orfaos();
   if(orf.length)h+=`<div class="note" style="border-left-color:var(--bad)"><b>${orf.length} lançamento${orf.length===1?'':'s'} sem conta</b>Apontam para uma conta ou cartão que não existe mais, então entram no somatório do mês mas não no saldo de ninguém. <a onclick="formOrfaos()">Resolver</a></div>`;
   h+=`<h2>Contas<span class="sp"></span><a onclick="abrirAjustes()">ajustar saldo</a></h2><div class="grp"><div class="rows">`;
@@ -1654,6 +1655,89 @@ function apagaPagtos(){
   Object.keys(meses).forEach(k=>{meses[k]=meses[k].filter(t=>!ids.has(t.id))});
   cache();fechar();render();toast(ids.size+(ids.size===1?' lançamento apagado':' lançamentos apagados'));
 }
+/* ---------- notificações do banco, quando rodando no app nativo ---------- */
+// O aparelho só aparece quando o app é o APK; no navegador nada disto existe.
+const noAparelho=()=>{try{return typeof Aparelho!=='undefined'&&!!Aparelho&&typeof Aparelho.pendentes==='function'}catch(e){return false}};
+const podeOuvir=()=>{try{return noAparelho()&&Aparelho.temPermissao()}catch(e){return false}};
+function notifs(){
+  if(!noAparelho())return [];
+  try{ return (JSON.parse(Aparelho.pendentes()||'[]')||[]).filter(n=>+n.valor>0) }catch(e){ return [] }
+}
+// o que a notificação parece ser: entrada, gasto no crédito ou gasto na conta
+function leNotif(n){
+  const t=semAcento((n.titulo||'')+' '+(n.texto||''));
+  const entrada=/(recebeu|recebido|entrou|credito em conta|transferencia recebida|deposito|estorno)/.test(t)
+    &&!/compra|aprovad|debitad/.test(t);
+  const credito=/(cartao|credito|aprovada|compra aprovada|fatura)/.test(t)&&!/debito em conta|conta corrente/.test(t);
+  const porNome=(lista)=>lista.find(x=>semAcento(x.nome).includes(semAcento(n.banco||'')))||lista[0];
+  const alvo=entrada?porNome(cfg.contas):credito?(porNome(cfg.cartoes)||porNome(cfg.contas)):porNome(cfg.contas);
+  const desc=nomeNaNotif(n);
+  return {t:entrada?'r':'d', pg:(alvo||{}).id||'', desc,
+    cat:categorizar(desc,entrada,entrada?+n.valor:-n.valor)};
+}
+// O que interessa na notificação é o estabelecimento, não a frase do banco:
+// "Compra aprovada de R$ 32,90 em BURGER KING no cartão final 1364" é "BURGER KING".
+function nomeNaNotif(n){
+  let t=' '+(n.texto||n.titulo||'')+' ';
+  t=t.replace(/R\$\s*[\d.,]+/g,' ')
+     .replace(/\bcart[ãa]o\s*(de\s*cr[ée]dito\s*)?(final\s*)?\d*/gi,' ')
+     .replace(/\bfinal\s*\d{3,4}\b/gi,' ')
+     .replace(/\bno\s+d[ée]bito\b|\bno\s+cr[ée]dito\b/gi,' ')
+     .replace(/\s{2,}/g,' ');
+  const pega=re=>{const m=t.match(re);return m?m[1]:''};
+  let nome=pega(/\bem\s+([^,.;]{3,40})/i)||pega(/\bpara\s+([^,.;]{3,40})/i)||pega(/\bde\s+([^,.;]{3,40})/i)||t;
+  const lixo='de|do|da|dos|das|em|no|na|nos|nas|para|pra|com|a|o';
+  nome=nome.replace(/^(compra|pagamento|d[ée]bito|cr[ée]dito|pix|transfer[êe]ncia|aprovad[ao]|conta)\s+/gi,'')
+           .replace(/\s{2,}/g,' ').trim()
+           .replace(new RegExp('^(?:(?:'+lixo+')\\s+|[-–·:]\\s*)+','i'),'').trim()   // sobras do começo
+           .replace(new RegExp('(?:\\s+(?:'+lixo+')|\\s*[-–·:])+$','i'),'').trim();  // e do fim
+  return limpaDesc(nome)||n.banco||'Movimento';
+}
+function avisaNotifs(){
+  const ns=notifs(); if(!ns.length)return '';
+  return `<div class="note" style="border-left-color:var(--acc)"><b>${ns.length} ${ns.length===1?'notificação do banco':'notificações do banco'}</b>${
+    ns.length===1?'Chegou uma notificação de movimento':'Chegaram notificações de movimento'} que o app ainda não lançou. <a onclick="formNotifs()">Ver e lançar</a></div>`;
+}
+let rascNotifs=null;
+function formNotifs(){
+  const ns=notifs();
+  if(!ns.length)return toast('Nada esperando');
+  if(!rascNotifs||rascNotifs.length!==ns.length)
+    rascNotifs=ns.map(n=>({...n, ...leNotif(n), usar:true}));
+  const destinos=cfg.contas.map(c=>[c.id,(c.emoji||'🏦')+' '+c.nome]).concat(cfg.cartoes.map(c=>[c.id,'💳 '+c.nome]));
+  abrir(cab('Notificações do banco')+
+  `<p class="hint" style="padding-left:0">O celular capturou estes avisos. Confira o destino e a categoria antes de lançar — depois, quando a Pluggy trouxer o mesmo gasto, o app reconhece e não duplica.</p>
+  <div class="grp"><div class="rows">`+rascNotifs.map((n,i)=>
+  `<div class="ilin" style="align-items:flex-start">
+    <button class="ick" style="${n.usar?'':'background:none;border-color:var(--line2)'}" onclick="mexeNotif(${i},'usar',!${n.usar})">${n.usar?'✓':''}</button>
+    <div class="imid"><div class="t1">${esc(n.desc)} <span class="${n.t==='r'?'up':''}">${n.t==='r'?'+':'−'}${brl(n.valor)}</span></div>
+    <div class="t2">${esc(n.banco||'')} · ${dataBR(new Date(+n.quando||Date.now()).toLocaleDateString('sv-SE'))} · ${esc((n.titulo||'').slice(0,40))}</div>
+    <div class="two" style="margin-top:8px">
+      <select onchange="mexeNotif(${i},'pg',this.value)">${destinos.map(([id,rot])=>`<option value="${id}" ${n.pg===id?'selected':''}>${esc(rot)}</option>`).join('')}</select>
+      <select onchange="mexeNotif(${i},'cat',this.value)">${cfg.categorias.map(c=>`<option value="${c.id}" ${n.cat===c.id?'selected':''}>${c.emoji} ${esc(c.nome)}</option>`).join('')}</select>
+    </div></div></div>`).join('')+`</div></div>
+  <div class="acts"><button class="btn g" onclick="jogaNotifs()">Descartar ${rascNotifs.length}</button>
+  <button class="btn" onclick="lancaNotifs()">Lançar ${rascNotifs.filter(n=>n.usar).length}</button></div>`);
+}
+function mexeNotif(i,k,v){if(!rascNotifs||!rascNotifs[i])return;rascNotifs[i][k]=(k==='usar'?!!v:v);formNotifs()}
+function jogaNotifs(){
+  try{ Aparelho.descartar(JSON.stringify((rascNotifs||[]).map(n=>n.id))) }catch(e){}
+  rascNotifs=null;fechar();render();toast('Descartadas');
+}
+function lancaNotifs(){
+  const usar=(rascNotifs||[]).filter(n=>n.usar&&n.pg);
+  if(!usar.length)return toast('Nada marcado');
+  usar.forEach(n=>{
+    const data=new Date(+n.quando||Date.now()).toLocaleDateString('sv-SE');
+    const tx={id:uid(),t:n.t,v:r2(+n.valor),desc:n.desc,cat:n.cat,pg:n.pg,data};
+    if(n.t==='d'&&cartao(n.pg))tx.parc=1;
+    const K=mk(data);meses[K]=(meses[K]||[]).concat(tx);
+  });
+  try{ Aparelho.descartar(JSON.stringify((rascNotifs||[]).map(n=>n.id))) }catch(e){}
+  rascNotifs=null;cache();fechar();render();
+  toast(usar.length+(usar.length===1?' lançamento feito':' lançamentos feitos'));
+}
+
 function formFiltro(){
   const chip=(on,rot,acao)=>`<button class="btn ${on?'':'g'} s" onclick="${acao}">${rot}</button>`;
   const n=(()=>{let i=doMes(st.mes);
@@ -2406,6 +2490,13 @@ function formAjustes(){
   h+=`<button class="btn g s" onclick="addCat()" style="margin-top:6px">Adicionar categoria</button>
   <h4>Cotações</h4><p class="hint" style="padding-left:0">${getTk()?'Token da brapi salvo neste aparelho.':'Sem token. Só ITUB4, PETR4, VALE3 e MGLU3 atualizam sozinhas.'}</p>
   <button class="btn g s" onclick="formToken()">${getTk()?'Trocar token':'Colar token da brapi'}</button>
+  ${noAparelho()?`<h4>Notificações do banco</h4>
+  <p class="hint" style="padding-left:0">${podeOuvir()
+    ? 'O app está recebendo as notificações dos seus bancos e guarda as que têm valor, para você lançar quando abrir. Elas ficam só neste aparelho.'
+    : 'Com a permissão de leitura de notificações, a compra no crédito aparece aqui no momento em que o banco avisa, sem esperar o dia que ele leva para processar.'}</p>
+  <div class="acts"><button class="btn ${podeOuvir()?'g':''}" onclick="Aparelho.pedirPermissao()">${podeOuvir()?'Rever a permissão':'Dar a permissão'}</button>
+  ${notifs().length?`<button class="btn g" onclick="formNotifs()">Ver ${notifs().length} esperando</button>`:''}</div>`:''}
+
   <h4>Minhas regras de categoria</h4><p class="hint" style="padding-left:0">${(cfg.regras||[]).length?(cfg.regras.length===1?'1 regra sua':cfg.regras.length+' regras suas')+'. O app usa elas antes das próprias.':'Ensine o app a reconhecer o que só você sabe, como um Pix que é sempre a mesma conta.'}</p>
   <div class="acts"><button class="btn g" onclick="formRegras()">Ver e criar regras</button></div>
 
