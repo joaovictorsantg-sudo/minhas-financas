@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v81 — 25/11';
+const VERSAO='v82 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -238,7 +238,7 @@ const r2=v=>Math.round(v*100)/100;
 const r4=v=>Math.round(v*10000)/10000;
 
 const DEF={
-  regras:[], destNotif:{}, notifDireto:false, salario:0, metaInvest:0, cotAt:'', cotTs:0, salarioQuando:'pu', nome:'', wkUrl:'', bancos:[], syncAuto:true, syncDireto:false, syncTs:0,
+  regras:[], destNotif:{}, notifDireto:true, salario:0, metaInvest:0, cotAt:'', cotTs:0, salarioQuando:'pu', nome:'', wkUrl:'', bancos:[], syncAuto:true, syncDireto:false, syncTs:0,
   contas:[
     {id:'conta',emoji:'🏦',nome:'Conta',saldo:0},
     {id:'dinheiro',emoji:'💵',nome:'Dinheiro',saldo:0}
@@ -272,7 +272,11 @@ const st={tab:'inicio',mes:mk(hoje()),filtro:'',fTipo:'',fOnde:''};
 
 const KEY='financas-joao-v3', TKKEY='brapi-token';
 function cache(){try{localStorage.setItem(KEY,JSON.stringify({cfg,meses}))}catch(e){toast('Sem espaço para salvar neste aparelho')}}
-try{const c=JSON.parse(localStorage.getItem(KEY)||'null');if(c){cfg=Object.assign(clone(DEF),c.cfg);meses=c.meses||{}}}catch(e){}
+try{const c=JSON.parse(localStorage.getItem(KEY)||'null');if(c){cfg=Object.assign(clone(DEF),c.cfg);meses=c.meses||{};
+  // nasceu desligado por cautela, mas a cautela já está no próprio critério:
+  // só entra direto o que vem de um destino escolhido antes
+  if(!cfg.diretoPadrao){cfg.diretoPadrao=1;cfg.notifDireto=true}
+}}catch(e){}
 function gravar(){cache()}
 function salvarCfg(){cache();render()}
 function salvarMes(){cache();render()}
@@ -1705,22 +1709,39 @@ function leNotif(n){
   // para saber, então ele não casa por texto
   const generico=x=>/^(conta|contas|dinheiro|carteira|banco|cartao|credito|debito|poupanca|corrente|principal)$/
     .test(semAcento(x.nome).trim());
-  const porNome=lista=>lista.find(x=>!generico(x)&&semAcento(x.nome).length>=3&&t.includes(semAcento(x.nome)))
+  // num comprovante as duas instituições aparecem, e a minha é a do lado que
+  // pagou quando o dinheiro saiu, a do lado que recebeu quando entrou
+  const lado=(()=>{
+    const marca=entrada?/\b(quem recebeu|destinatario|recebedor|favorecido)\b/
+                       :/\b(quem pagou|pagador|remetente|origem)\b/;
+    const m=t.match(marca); if(!m)return '';
+    const resto=t.slice(m.index+m[0].length);
+    const fim=resto.search(entrada?/\b(quem pagou|pagador|remetente)\b/:/\b(quem recebeu|destinatario|recebedor)\b/);
+    return fim>0?resto.slice(0,fim):resto;
+  })();
+  const noLado=lista=>lado?lista.find(x=>!generico(x)&&semAcento(x.nome).length>=3&&lado.includes(semAcento(x.nome))):null;
+  // achar pelo nome é uma coisa; cair na primeira conta da lista é outra, e
+  // só a primeira dá para lançar sem perguntar
+  const firme=lista=>noLado(lista)
+    ||lista.find(x=>!generico(x)&&semAcento(x.nome).length>=3&&t.includes(semAcento(x.nome)))
     ||lista.find(x=>semAcento(x.nome).includes(semAcento(n.banco||'')))
-    ||lista.find(x=>semAcento(n.banco||'').includes(semAcento(x.nome))&&!generico(x))||lista[0];
+    ||lista.find(x=>semAcento(n.banco||'').includes(semAcento(x.nome))&&!generico(x));
+  const porNome=lista=>firme(lista)||lista[0];
   // o nome do app do banco e o nome que a pessoa deu à conta não têm por que
   // coincidir — "PicPay" e "Conta". O que ela escolheu da última vez vale mais.
   const chave=chaveNotif(n,entrada,credito);
   const guardado=(cfg.destNotif||{})[chave];
   const valido=guardado&&(conta(guardado)||cartao(guardado));
-  const alvo=valido?{id:guardado}
-    :entrada?porNome(cfg.contas):credito?(porNome(cfg.cartoes)||porNome(cfg.contas)):porNome(cfg.contas);
+  const busca=f=>entrada?f(cfg.contas):credito?(f(cfg.cartoes)||f(cfg.contas)):f(cfg.contas);
+  const alvo=valido?{id:guardado}:busca(porNome);
+  // o destino é certo quando foi escolhido antes ou quando o aviso o nomeia
+  const certo=!!valido||!!busca(firme);
   const desc=nomeNaNotif(n,entrada);
   // "Henrique Souza da Costa" no extrato parece um gasto com alguém; o que
   // aconteceu foi um Pix dele para você, e a direção importa mais que o nome
   const pix=/\bpix\b|transferencia/.test(t);
   const descr=pix&&!/^pix\s/i.test(desc)?((entrada?'Pix de ':'Pix para ')+desc):desc;
-  return {t:entrada?'r':'d', pg:(alvo||{}).id||'', desc:descr, dataISO:quandoISO,
+  return {t:entrada?'r':'d', pg:(alvo||{}).id||'', desc:descr, dataISO:quandoISO, certo,
     cat:categorizar(desc,entrada,entrada?+n.valor:-n.valor)};
 }
 // O que interessa na notificação é o estabelecimento, não a frase do banco:
@@ -1790,7 +1811,7 @@ function notifsAoAbrir(){
   if(!cfg.notifDireto)return;
   const ns=notifs(); if(!ns.length)return;
   const lidos=ns.map(n=>({...n, ...leNotif(n)}));
-  const certos=lidos.filter(n=>n.pg&&(cfg.destNotif||{})[chaveNotif(n,n.t==='r',!!cartao(n.pg))]===n.pg);
+  const certos=lidos.filter(n=>n.pg&&n.certo);
   if(!certos.length)return;
   certos.forEach(n=>{
     const data=n.dataISO||new Date(+n.quando||Date.now()).toLocaleDateString('sv-SE');
@@ -2643,7 +2664,7 @@ function formAjustes(){
   ${podeOuvir()?`<div class="ilin" style="border-bottom:0" onclick="cfg.notifDireto=!cfg.notifDireto;salvarCfg();abrirAjustes()">
     <button class="ick" style="${cfg.notifDireto?'':'background:none;border-color:var(--line2)'}">${cfg.notifDireto?'✓':''}</button>
     <div class="imid"><div class="t1">Lançar sem revisar</div>
-    <div class="t2">Entra direto quando o app abre, mas só o que vem de um banco cujo destino você já escolheu uma vez. O que ele não souber onde pôr continua esperando.</div></div></div>`:''}`:''}
+    <div class="t2">Entra direto quando o app abre, mas só quando o aviso diz de qual conta ou cartão saiu — ou quando você já escolheu o destino daquele banco uma vez. O que ficar em dúvida continua esperando.</div></div></div>`:''}`:''}
 
   <h4>Minhas regras de categoria</h4><p class="hint" style="padding-left:0">${(cfg.regras||[]).length?(cfg.regras.length===1?'1 regra sua':cfg.regras.length+' regras suas')+'. O app usa elas antes das próprias.':'Ensine o app a reconhecer o que só você sabe, como um Pix que é sempre a mesma conta.'}</p>
   <div class="acts"><button class="btn g" onclick="formRegras()">Ver e criar regras</button></div>

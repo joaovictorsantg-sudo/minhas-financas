@@ -137,6 +137,11 @@ figura ali mesmo, sem internet. Num comprovante as duas pontas vêm
 rotuladas e o sentido está no alto: "quem recebeu" interessa quando o
 dinheiro saiu, "quem pagou" quando entrou.
 
+Lançar sem revisar vale para o aviso que diz de onde o dinheiro saiu —
+pelo nome da conta no texto, ou pela instituição do lado dele no
+comprovante. Cair na primeira conta da lista por falta de pista não é
+saber, e esse continua esperando revisão.
+
 Aviso de banco cujo destino já foi
 escolhido uma vez pode entrar sem revisão, se a pessoa quiser; o que o
 app não sabe onde pôr continua esperando, porque lançar na conta errada
