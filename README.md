@@ -133,7 +133,10 @@ que o banco oferece depois do envio traz valor, data e para quem foi.
 
 Compartilhar o mesmo comprovante duas vezes é fácil, e o identificador
 da transação que ele traz diz que é o mesmo movimento. Sem esse
-identificador, valem conta, dia, valor e lado.
+identificador, valem conta, dia, valor e lado. O identificador diz que é
+o mesmo movimento, não que esteja igual: reenviar um comprovante depois
+de o app aprender a lê-lo conserta o lançamento anterior em vez de virar
+um segundo.
 
 Cada banco rotula o comprovante do seu jeito — o Inter escreve "Quem
 recebeu" e "Quem pagou", o PicPay escreve "Para" e "De" —, mas a forma é

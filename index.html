@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v88 — 25/11';
+const VERSAO='v89 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1900,9 +1900,26 @@ function avisaNotifs(){
 // porque lançar na conta errada é pior que esperar.
 // o mesmo movimento já lançado: pelo identificador quando ele existe, e
 // senão pelo que o define — mesma conta, mesmo dia, mesmo valor, mesmo lado
-function jaLancado(n,data){
-  return todos().some(t=>n.idTx?t.idTx===n.idTx
-    :(t.pg===n.pg&&t.data===data&&t.t===n.t&&Math.abs(r2(t.v)-r2(+n.valor))<0.005));
+function achaIgual(n,data){
+  return todos().find(t=>n.idTx?t.idTx===n.idTx
+    :(t.pg===n.pg&&t.data===data&&t.t===n.t&&Math.abs(r2(t.v)-r2(+n.valor))<0.005))||null;
+}
+/**
+ * O identificador diz que é o mesmo movimento; o resto pode ter mudado.
+ * Reenviar um comprovante depois de o app aprender a lê-lo conserta o
+ * lançamento que ele tinha feito errado, em vez de virar um segundo.
+ * Devolve 'novo', 'corrigido' ou 'repetido'.
+ */
+function poeOuCorrige(n,data,tx){
+  const ja=achaIgual(n,data);
+  if(!ja){const K=mk(data);meses[K]=(meses[K]||[]).concat(tx);return 'novo'}
+  const mudou=ja.pg!==tx.pg||ja.t!==tx.t||Math.abs(r2(ja.v)-r2(tx.v))>=0.005||ja.data!==data;
+  if(!mudou)return 'repetido';
+  if(ja.data!==data){ // mês diferente, outra gaveta
+    const antes=mk(ja.data);meses[antes]=(meses[antes]||[]).filter(x=>x.id!==ja.id);
+    const K=mk(data);meses[K]=(meses[K]||[]).concat(Object.assign(ja,{pg:tx.pg,t:tx.t,v:tx.v,data,desc:tx.desc,cat:tx.cat}));
+  } else Object.assign(ja,{pg:tx.pg,t:tx.t,v:tx.v,desc:tx.desc,cat:tx.cat});
+  return 'corrigido';
 }
 function notifsAoAbrir(){
   if(!cfg.notifDireto)return;
@@ -1910,19 +1927,18 @@ function notifsAoAbrir(){
   const lidos=ns.map(n=>({...n, ...leNotif(n)}));
   const certos=lidos.filter(n=>n.pg&&n.certo);
   if(!certos.length)return;
-  const repetidos=[];
+  const conta_={novo:0,corrigido:0,repetido:0};
   certos.forEach(n=>{
     const data=n.dataISO||new Date(+n.quando||Date.now()).toLocaleDateString('sv-SE');
-    if(jaLancado(n,data)){repetidos.push(n);return}
     const tx={id:uid(),t:n.t,v:r2(+n.valor),desc:n.desc,cat:n.cat,pg:n.pg,data,idTx:n.idTx||undefined};
     if(n.t==='d'&&cartao(n.pg))tx.parc=1;
-    const K=mk(data);meses[K]=(meses[K]||[]).concat(tx);
+    conta_[poeOuCorrige(n,data,tx)]++;
   });
   try{ Aparelho.descartar(JSON.stringify(certos.map(n=>n.id))) }catch(e){}
   cache();render();
-  const novos=certos.length-repetidos.length;
-  toast(novos?novos+(novos===1?' lançamento do banco':' lançamentos do banco')
-    :repetidos.length===1?'Esse já estava lançado':'Esses já estavam lançados');
+  toast(conta_.novo?conta_.novo+(conta_.novo===1?' lançamento do banco':' lançamentos do banco')
+    :conta_.corrigido?conta_.corrigido+(conta_.corrigido===1?' lançamento corrigido':' lançamentos corrigidos')
+    :conta_.repetido===1?'Esse já estava lançado':'Esses já estavam lançados');
 }
 let rascNotifs=null;
 function formNotifs(){
@@ -1963,18 +1979,18 @@ function jogaNotifs(){
 function lancaNotifs(){
   const usar=(rascNotifs||[]).filter(n=>n.usar&&n.pg);
   if(!usar.length)return toast('Nada marcado');
-  let feitos=0, repetidos=0;
+  const c2={novo:0,corrigido:0,repetido:0};
   usar.forEach(n=>{
     const data=n.dataISO||new Date(+n.quando||Date.now()).toLocaleDateString('sv-SE');
-    if(jaLancado(n,data)){repetidos++;return}
     const tx={id:uid(),t:n.t,v:r2(+n.valor),desc:n.desc,cat:n.cat,pg:n.pg,data,idTx:n.idTx||undefined};
     if(n.t==='d'&&cartao(n.pg))tx.parc=1;
-    const K=mk(data);meses[K]=(meses[K]||[]).concat(tx);feitos++;
+    c2[poeOuCorrige(n,data,tx)]++;
   });
   try{ Aparelho.descartar(JSON.stringify((rascNotifs||[]).map(n=>n.id))) }catch(e){}
   rascNotifs=null;cache();fechar();render();
-  toast(feitos?feitos+(feitos===1?' lançamento feito':' lançamentos feitos')+(repetidos?' ('+repetidos+' já estava lançado)':'')
-    :repetidos===1?'Esse já estava lançado':'Esses já estavam lançados');
+  toast(c2.novo?c2.novo+(c2.novo===1?' lançamento feito':' lançamentos feitos')
+    :c2.corrigido?c2.corrigido+(c2.corrigido===1?' lançamento corrigido':' lançamentos corrigidos')
+    :c2.repetido===1?'Esse já estava lançado':'Esses já estavam lançados');
 }
 
 function formFiltro(){
