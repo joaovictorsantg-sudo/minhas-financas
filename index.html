@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v71 — 25/11';
+const VERSAO='v72 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1669,7 +1669,7 @@ function apagaPagtos(){
 // O aparelho só aparece quando o app é o APK; no navegador nada disto existe.
 // A parte web se atualiza sozinha; o APK só muda quando mexo no código
 // nativo. Sem isto não haveria como saber que chegou um APK novo.
-const APK='1.1';
+const APK='1.2';
 const APK_LINK='https://github.com/joaovictorsantg-sudo/minhas-financas/releases/download/apk/minhas-financas.apk';
 const apkVelho=()=>{try{return noAparelho()&&typeof Aparelho.versaoApp==='function'&&Aparelho.versaoApp()!==APK}catch(e){return false}};
 const noAparelho=()=>{try{return typeof Aparelho!=='undefined'&&!!Aparelho&&typeof Aparelho.pendentes==='function'}catch(e){return false}};

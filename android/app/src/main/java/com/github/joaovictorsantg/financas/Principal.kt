@@ -1,22 +1,30 @@
 package com.github.joaovictorsantg.financas
 
 import android.annotation.SuppressLint
-import android.content.Intent
+import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
+import android.os.Message
+import android.view.Gravity
 import android.view.ViewGroup
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Button
+import android.widget.FrameLayout
+import android.widget.LinearLayout
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 
 class Principal : AppCompatActivity() {
 
+  private lateinit var raiz: FrameLayout
   private lateinit var web: WebView
 
-  /** Quem está esperando o arquivo escolhido, se alguém estiver. */
+  /** A janela que o conector do banco abre por cima, quando abre. */
+  private var janela: View? = null
+
   private var esperandoArquivo: ValueCallback<Array<Uri>>? = null
 
   private val escolher = registerForActivityResult(
@@ -32,42 +40,97 @@ class Principal : AppCompatActivity() {
   override fun onCreate(estado: Bundle?) {
     super.onCreate(estado)
 
-    web = WebView(this).apply {
-      layoutParams = ViewGroup.LayoutParams(
-        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
-      )
-      settings.javaScriptEnabled = true
-      settings.domStorageEnabled = true        // os dados moram aqui
-      settings.databaseEnabled = true
-      settings.mediaPlaybackRequiresUserGesture = false
-
-      webChromeClient = object : WebChromeClient() {
-        // sem isto, restaurar backup não chega nem a abrir o seletor
-        override fun onShowFileChooser(
-          v: WebView?,
-          callback: ValueCallback<Array<Uri>>?,
-          params: FileChooserParams?
-        ): Boolean {
-          esperandoArquivo?.onReceiveValue(null)   // um pedido anterior que ficou aberto
-          esperandoArquivo = callback
-          return runCatching {
-            escolher.launch(params!!.createIntent()); true
-          }.getOrElse {
-            esperandoArquivo = null; callback?.onReceiveValue(null); false
-          }
-        }
-      }
-
-      // Tudo navega aqui dentro. O conector do Open Finance leva a páginas do
-      // agregador e do banco, e mandá-las para fora interromperia a conexão no
-      // meio; o botão de voltar do aparelho traz de volta.
-      webViewClient = WebViewClient()
-      addJavascriptInterface(Ponte(this@Principal), "Aparelho")
-    }
-    setContentView(web)
+    raiz = FrameLayout(this)
+    web = novaWeb(principal = true)
+    raiz.addView(web)
+    setContentView(raiz)
 
     if (estado == null) web.loadUrl(SITE) else web.restoreState(estado)
   }
+
+  @SuppressLint("SetJavaScriptEnabled", "AddJavascriptInterface")
+  private fun novaWeb(principal: Boolean): WebView = WebView(this).apply {
+    layoutParams = FrameLayout.LayoutParams(
+      ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+    )
+    settings.javaScriptEnabled = true
+    settings.domStorageEnabled = true        // os dados moram aqui
+    settings.databaseEnabled = true
+    settings.mediaPlaybackRequiresUserGesture = false
+    settings.setSupportMultipleWindows(true) // o conector do banco abre janela
+    settings.javaScriptCanOpenWindowsAutomatically = true
+    webViewClient = WebViewClient()
+    if (principal) addJavascriptInterface(Ponte(this@Principal), "Aparelho")
+
+    webChromeClient = object : WebChromeClient() {
+      override fun onCreateWindow(
+        v: WebView?, dialog: Boolean, gesto: Boolean, msg: Message?
+      ): Boolean {
+        val filha = abrirJanela() ?: return false
+        (msg?.obj as? WebView.WebViewTransport)?.webView = filha
+        msg?.sendToTarget()
+        return true
+      }
+
+      override fun onCloseWindow(w: WebView?) { fecharJanela() }
+
+      // sem isto, restaurar backup não chega nem a abrir o seletor
+      override fun onShowFileChooser(
+        v: WebView?, callback: ValueCallback<Array<Uri>>?, params: FileChooserParams?
+      ): Boolean {
+        esperandoArquivo?.onReceiveValue(null)
+        esperandoArquivo = callback
+        return runCatching {
+          escolher.launch(params!!.createIntent()); true
+        }.getOrElse {
+          esperandoArquivo = null; callback?.onReceiveValue(null); false
+        }
+      }
+    }
+  }
+
+  /**
+   * Monta a janela de cima com uma barra de fechar. O conector termina numa
+   * página que diz "pode fechar esta janela" e não fecha nada sozinha: sem a
+   * barra, não há como voltar ao app.
+   */
+  private fun abrirJanela(): WebView? {
+    fecharJanela()
+    val caixa = LinearLayout(this).apply {
+      orientation = LinearLayout.VERTICAL
+      setBackgroundColor(Color.parseColor("#0E0F12"))
+      layoutParams = FrameLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+      )
+    }
+    val fechar = Button(this).apply {
+      text = "Fechar e voltar ao app"
+      setOnClickListener { fecharJanela() }
+      layoutParams = LinearLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+      ).apply { gravity = Gravity.CENTER }
+    }
+    val filha = novaWeb(principal = false)
+    filha.layoutParams = LinearLayout.LayoutParams(
+      ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
+    )
+    caixa.addView(fechar)
+    caixa.addView(filha)
+    raiz.addView(caixa)
+    janela = View(caixa, filha)
+    return filha
+  }
+
+  private fun fecharJanela() {
+    val j = janela ?: return
+    janela = null
+    raiz.removeView(j.caixa)
+    j.web.destroy()
+    // o conector avisa a página quando termina; se não avisou, uma olhada basta
+    web.evaluateJavascript("window.dispatchEvent(new Event('focus'))", null)
+  }
+
+  private class View(val caixa: LinearLayout, val web: WebView)
 
   override fun onSaveInstanceState(fora: Bundle) {
     super.onSaveInstanceState(fora); web.saveState(fora)
@@ -75,7 +138,16 @@ class Principal : AppCompatActivity() {
 
   @Deprecated("deprecated")
   override fun onBackPressed() {
-    if (web.canGoBack()) web.goBack() else super.onBackPressed()
+    val j = janela
+    when {
+      j != null && j.web.canGoBack() -> j.web.goBack()
+      j != null -> fecharJanela()
+      // fora do site e sem janela: um toque volta ao app, em vez de desandar
+      // o caminho inteiro do banco passo a passo
+      web.url?.startsWith(SITE) == false -> web.loadUrl(SITE)
+      web.canGoBack() -> web.goBack()
+      else -> super.onBackPressed()
+    }
   }
 
   companion object {
