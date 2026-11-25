@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v85 — 25/11';
+const VERSAO='v86 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1705,13 +1705,15 @@ function leNotif(n){
   // "Quem recebeu" é o rótulo de um campo, não o sentido do dinheiro: num
   // comprovante os dois lados aparecem, e quem decide é o que está no alto
   const tDir=t.replace(/quem (recebeu|pagou)|recebedor|pagador|destinatario|remetente|beneficiario|favorecido/g,' ');
-  const base=!/(enviad|enviei|voce (enviou|pagou|transferiu)|pagamento (realizado|efetuado)|transferencia enviada)/.test(tDir)
-    &&/(recebeu|recebido|entrou|credito em conta|transferencia recebida|deposito|estorno)/.test(tDir)
-    &&!/compra|aprovad|debitad/.test(tDir);
-  // "Pix recebido devolvido" é dinheiro saindo: a devolução desfaz o que o
-  // verbo antes dela diz, e sem isso as duas pontas trocam de lado
-  const devolveu=/devolvid|devoluc/.test(tDir)&&/(recebid|recebeu|enviad|enviou)/.test(tDir);
-  const entrada=devolveu?!base:base;
+  // o que a pessoa fez vale mais que o nome do movimento: numa devolução o
+  // banco diz "Pix devolvido" dos dois lados, e só "você recebeu" distingue
+  const euRecebi=/voce (recebeu|ganhou)|recebemos|caiu na sua conta|creditado na/.test(tDir);
+  const euPaguei=/voce (enviou|pagou|transferiu)|enviamos|debitado da sua/.test(tDir);
+  const base=euRecebi?true:euPaguei?false:
+    (!/(enviad|enviei|pagamento (realizado|efetuado)|transferencia enviada)/.test(tDir)
+     &&/(recebeu|recebido|entrou|credito em conta|transferencia recebida|deposito|estorno)/.test(tDir)
+     &&!/compra|aprovad|debitad/.test(tDir));
+
   // a carteira do celular avisa a compra sem dizer o banco, e aproximação é
   // quase sempre crédito
   const carteira=/wallet|carteira|google pay|samsung pay/.test(semAcento(n.banco||''));
@@ -1724,15 +1726,40 @@ function leNotif(n){
   // para saber, então ele não casa por texto
   const generico=x=>/^(conta|contas|dinheiro|carteira|banco|cartao|credito|debito|poupanca|corrente|principal)$/
     .test(semAcento(x.nome).trim());
+
+  // num comprovante com as duas pontas rotuladas, o verbo do título não diz
+  // de quem é o documento — e quando as duas contas são minhas, nada no
+  // texto diz, menos a marca do banco que o emitiu, impressa no alto
+  // as duas seções começam com o mesmo "Nome", então o corte é pelo rótulo
+  // seguinte e não pelo que elas contêm
+  const acha=re=>{const m=t.match(re);return m?{i:m.index,fim:m.index+m[0].length}:null};
+  const mR=acha(/\bquem recebeu\b/), mP=acha(/\bquem pagou\b/);
+  const ate=(m,outro)=>!m?'':t.slice(m.fim, outro&&outro.i>m.i?outro.i:undefined);
+  const secR=ate(mR,mP), secP=ate(mP,mR);
+  const comprov=!!(secR&&secP);
+  const minhaEm=sec=>cfg.contas.concat(cfg.cartoes).find(x=>!generico(x)
+    &&semAcento(x.nome).length>=3&&sec.includes(semAcento(x.nome)));
+  const emitente=(()=>{ // a marca impressa no alto do comprovante
+    const alto=t.split('\n').slice(0,3).join(' ');
+    return cfg.contas.concat(cfg.cartoes).find(x=>!generico(x)&&semAcento(x.nome).split(/\s+/)
+      .some(w=>w.length>=4&&!/^(banco|conta|cartao|credito|debito)$/.test(w)&&alto.includes(w)));
+  })();
+  const dono=comprov?(()=>{
+    const r=minhaEm(secR), p=minhaEm(secP);
+    if(r&&p)return emitente&&emitente.id===r.id?{x:r,ent:true}
+            :emitente&&emitente.id===p.id?{x:p,ent:false}:null;
+    return r?{x:r,ent:true}:p?{x:p,ent:false}:null;
+  })():null;
+
+  const entrada=dono?dono.ent:base;
+  // transferência entre duas contas minhas, sem a marca do banco no alto:
+  // não há no texto o que diga de qual lado o documento está
+  const ambiguo=comprov&&!dono&&!!minhaEm(secR)&&!!minhaEm(secP);
   // num comprovante as duas instituições aparecem, e a minha é a do lado que
   // pagou quando o dinheiro saiu, a do lado que recebeu quando entrou
-  const lado=(()=>{
-    const marca=entrada?/\b(quem recebeu|destinatario|recebedor|favorecido)\b/
-                       :/\b(quem pagou|pagador|remetente|origem)\b/;
-    const m=t.match(marca); if(!m)return '';
-    const resto=t.slice(m.index+m[0].length);
-    const fim=resto.search(entrada?/\b(quem pagou|pagador|remetente)\b/:/\b(quem recebeu|destinatario|recebedor)\b/);
-    return fim>0?resto.slice(0,fim):resto;
+  const lado=comprov?(entrada?secR:secP):(()=>{
+    const marca=entrada?/\b(destinatario|recebedor|favorecido)\b/:/\b(pagador|remetente|origem)\b/;
+    const m=t.match(marca);return m?t.slice(m.index+m[0].length):'';
   })();
   const noLado=lista=>lado?lista.find(x=>!generico(x)&&semAcento(x.nome).length>=3&&lado.includes(semAcento(x.nome))):null;
   // achar pelo nome é uma coisa; cair na primeira conta da lista é outra, e
@@ -1750,7 +1777,7 @@ function leNotif(n){
   const busca=f=>entrada?f(cfg.contas):credito?(f(cfg.cartoes)||f(cfg.contas)):f(cfg.contas);
   const alvo=valido?{id:guardado}:busca(porNome);
   // o destino é certo quando foi escolhido antes ou quando o aviso o nomeia
-  const certo=!!valido||!!busca(firme);
+  const certo=!ambiguo&&(!!valido||!!busca(firme));
   const desc=nomeNaNotif(n,entrada);
   // "Henrique Souza da Costa" no extrato parece um gasto com alguém; o que
   // aconteceu foi um Pix dele para você, e a direção importa mais que o nome

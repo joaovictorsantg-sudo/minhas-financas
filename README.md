@@ -142,10 +142,14 @@ altura em que estão na figura, e cada rótulo volta a encontrar seu valor.
 
 Nenhum banco compartilha esse comprovante como texto — o Inter manda
 imagem, o PicPay um PDF desenhado —, então o aplicativo lê as letras da
-figura ali mesmo, sem internet. Num comprovante as duas pontas vêm
-rotuladas e o sentido está no alto: "quem recebeu" interessa quando o
-dinheiro saiu, "quem pagou" quando entrou. Devolução desfaz o verbo que
-vem antes dela — "Pix recebido devolvido" é dinheiro saindo.
+figura ali mesmo, sem internet. Num comprovante as duas pontas vêm rotuladas, e numa transferência entre
+contas minhas as duas são minhas: nenhum verbo resolve, porque "Pix
+devolvido" é o nome do movimento dos dois lados. De quem é o documento
+está na marca do banco impressa no alto, e é ela que diz qual lado sou
+eu — se eu estou em "quem pagou", o dinheiro saiu.
+
+Sem essa marca e com as duas pontas minhas não há o que decidir, e esse
+caso vai para revisão em vez de ser adivinhado.
 
 Lançar sem revisar vale para o aviso que diz de onde o dinheiro saiu —
 pelo nome da conta no texto, ou pela instituição do lado dele no
