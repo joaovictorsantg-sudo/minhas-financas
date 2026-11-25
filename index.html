@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v94 — 25/11';
+const VERSAO='v95 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -894,6 +894,19 @@ function novo(t,a){
   // com banco conectado o saldo já vem de lá, e a saída do aporte já está nele
   fl={t,ativo:a||(cfg.ativos[0]||{}).id,v:'',desc:'',data:hoje(),jaSaiu:!!cfg.bancos.length,
       pg:t==='d'?((cfg.cartoes[0]||{}).id||contaPadrao()):contaPadrao(),cat:'',q:'',pu:''};formLanc()}
+/**
+ * Editar é o mesmo formulário com os campos preenchidos. Aporte fica de
+ * fora: ele mexeu na posição e no preço médio quando foi lançado, e refazer
+ * essa conta ao contrário é errar de um jeito difícil de perceber.
+ */
+function editaLanc(k,id){
+  const tx=(meses[k]||[]).find(x=>x.id===id); if(!tx)return;
+  if(tx.t==='a')return toast('Aporte não se edita: exclua e lance de novo');
+  fl={t:tx.t,ativo:(cfg.ativos[0]||{}).id,v:n2(tx.v),desc:tx.desc||'',data:tx.data,
+      pg:tx.pg,cat:tx.cat||'',parc:tx.parc||1,q:'',pu:'',jaSaiu:false,
+      edit:{k,id,idTx:tx.idTx}};
+  formLanc();
+}
 function guardaForm(){['v','desc','data','pg','cat','parc','ativo','q','pu'].forEach(k=>{const e=$('#f_'+k);if(e)fl[k]=e.value})}
 function alternaJaSaiu(){guardaForm();fl.jaSaiu=!fl.jaSaiu;formLanc()}
 function setTipo(t){guardaForm();fl.t=t;if(t!=='d'&&cartao(fl.pg))fl.pg=contaPadrao();fl.cat='';formLanc()}
@@ -902,7 +915,8 @@ function formLanc(){
   const ctas=cfg.contas.map(c=>({id:c.id,n:c.emoji+' '+c.nome}));
   const pgs=t==='d'?[...cfg.cartoes.map(c=>({id:c.id,n:'💳 '+c.nome})),...ctas]:ctas;
   const a=t==='a'?ativo(fl.ativo):null, erv=a&&a.rv;
-  let h=cab('Novo lançamento')+`<div class="seg">${[['d','Gasto'],['r','Entrada'],['a','Investir']].map(([k,n])=>`<button class="${t===k?'on':''}" onclick="setTipo('${k}')">${n}</button>`).join('')}</div>`;
+  const tipos=fl.edit?[['d','Gasto'],['r','Entrada']]:[['d','Gasto'],['r','Entrada'],['a','Investir']];
+  let h=cab(fl.edit?'Editar lançamento':'Novo lançamento')+`<div class="seg">${tipos.map(([k,n])=>`<button class="${t===k?'on':''}" onclick="setTipo('${k}')">${n}</button>`).join('')}</div>`;
   if(t==='a'&&!cfg.ativos.length)return abrir(h+`<div class="blank">Cadastre um investimento primeiro.<div style="margin-top:16px"><button class="btn s" onclick="fechar();formAtivo()">Adicionar investimento</button></div></div>`);
   if(t==='a')h+=`<label>Onde você investiu</label><select id="f_ativo" onchange="guardaForm();formLanc()">${cfg.ativos.map(x=>`<option value="${x.id}" ${fl.ativo===x.id?'selected':''}>${esc(x.nome)}</option>`).join('')}</select>`;
   if(erv){
@@ -922,7 +936,7 @@ function formLanc(){
     <div class="imid"><div class="t1">O banco já sabe deste aporte</div>
     <div class="t2">A conta já foi descontada e o dinheiro já está na posição que vem da corretora. Marcado, ele conta no investido do mês sem mexer no saldo nem no total aplicado.</div></div></div>`;
   if(t==='d'&&cartao(fl.pg))h+=`<label>Parcelas</label><select id="f_parc">${Array.from({length:18},(_,i)=>`<option value="${i+1}" ${+fl.parc===i+1?'selected':''}>${i===0?'À vista':(i+1)+'x'}</option>`).join('')}</select>`;
-  h+=`<div class="acts fim"><button class="btn" onclick="salvarLanc()">Salvar</button></div>`;
+  h+=`<div class="acts fim">${fl.edit?`<button class="btn d" onclick="excluir('${fl.edit.k}','${fl.edit.id}')">Excluir</button>`:''}<button class="btn" onclick="salvarLanc()">Salvar</button></div>`;
   abrir(h);
   setTimeout(()=>{const e=$('#f_v')||$('#f_q');if(e&&!e.value)e.focus()},60);
 }
@@ -940,7 +954,20 @@ function salvarLanc(){
   const tx={id:uid(),t:fl.t,v,desc:(fl.desc||'').trim(),pg:fl.pg,data:fl.data};
   if(fl.t==='a'){if(!a)return toast('Escolha o investimento');tx.ativo=a.id}else tx.cat=fl.cat||(fl.t==='r'?'extra':'outros');
   if(fl.t==='d'&&cartao(fl.pg))tx.parc=+fl.parc||1;
-  const k=mk(tx.data);meses[k]=(meses[k]||[]).concat(tx);
+  const k=mk(tx.data);
+  if(fl.edit){
+    const ant=fl.edit;
+    tx.id=ant.id;
+    // o identificador acompanha: reenviar o comprovante depois ainda encontra
+    // este lançamento em vez de criar outro
+    if(ant.idTx)tx.idTx=ant.idTx;
+    meses[ant.k]=(meses[ant.k]||[]).filter(x=>x.id!==ant.id);
+    meses[k]=(meses[k]||[]).concat(tx);
+    if(ant.k!==k)salvarMes(ant.k);
+    salvarMes(k);fl.edit=null;fechar();render();
+    return toast('Lançamento alterado');
+  }
+  meses[k]=(meses[k]||[]).concat(tx);
   // o banco já reflete os dois lados: o dinheiro saiu da conta e entrou na
   // posição. Registrar aqui serve ao investido do mês, não ao patrimônio.
   const jaLa=fl.t==='a'&&fl.jaSaiu;
@@ -968,7 +995,7 @@ function detalhe(k,id){
   if(a&&tx.q)sub+=' · '+tx.q+' cotas de '+esc(a.nome);
   abrir(cab(esc(tx.desc||(a?a.nome:c.nome)))+`<span class="vbig">${money(tx.v)}</span>
   <p class="hint" style="padding-left:0;margin-top:6px">${sub}</p>
-  <div class="acts fim"><button class="btn g" onclick="fechar()">Fechar</button><button class="btn d" onclick="excluir('${k}','${id}')">Excluir</button></div>`);
+  <div class="acts fim"><button class="btn d" onclick="excluir('${k}','${id}')">Excluir</button>${tx.t==='a'?'':`<button class="btn" onclick="editaLanc('${k}','${id}')">Editar</button>`}</div>`);
 }
 function excluir(k,id){
   const tx=(meses[k]||[]).find(x=>x.id===id);if(!tx)return;

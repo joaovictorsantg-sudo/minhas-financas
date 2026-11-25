@@ -353,3 +353,8 @@ O service worker busca a página pela rede antes do cache, mas o cache
 HTTP do GitHub Pages fica no caminho e devolve a versão de minutos
 atrás. Rede primeiro por cima disso entrega o que já estava lá e parece
 atualizado, que é pior do que não atualizar: a busca é sem cache.
+
+Editar um lançamento é o mesmo formulário de criar, preenchido, e o
+identificador da transação acompanha: reenviar o comprovante depois
+ainda encontra aquele lançamento em vez de criar outro. Aporte fica de
+fora, porque ele mexeu na posição e no preço médio quando foi lançado.
