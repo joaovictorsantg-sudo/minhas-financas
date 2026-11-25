@@ -1,4 +1,4 @@
-const CACHE = 'financas-v90';
+const CACHE = 'financas-v91';
 const SHELL = [
   './', './index.html',
   './icons/icon-192.png', './icons/icon-512.png',
@@ -31,9 +31,12 @@ self.addEventListener('fetch', e => {
   const ehPagina = req.mode === 'navigate' || req.destination === 'document';
 
   if (ehPagina) {
-    // rede primeiro: uma versão nova aparece já na primeira abertura
+    // rede primeiro, e sem passar pelo cache HTTP: o GitHub Pages manda
+    // guardar a página por minutos, e "rede primeiro" por cima disso ainda
+    // entrega a versão de antes — que é pior do que não atualizar, porque
+    // parece atualizado
     e.respondWith(
-      fetch(req)
+      fetch(new Request(req.url, {cache: 'no-cache', credentials: 'same-origin'}))
         .then(res => {
           if (res && res.ok) caches.open(CACHE).then(c => c.put(req, res.clone()));
           return res;

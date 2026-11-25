@@ -338,3 +338,8 @@ vez que ele for aberto.
 A fatura fechada vem do banco sempre, porque é um número definitivo. A
 aberta depende do cartão: um banco mostra o parcial certo e o outro
 oscila durante o dia, então a escolha é por cartão, no formulário dele.
+
+O service worker busca a página pela rede antes do cache, mas o cache
+HTTP do GitHub Pages fica no caminho e devolve a versão de minutos
+atrás. Rede primeiro por cima disso entrega o que já estava lá e parece
+atualizado, que é pior do que não atualizar: a busca é sem cache.

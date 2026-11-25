@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v90 — 25/11';
+const VERSAO='v91 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -2237,6 +2237,16 @@ function formCartao(id){
   <p class="hint" style="padding-left:0">O que você já gastou neste cartão antes de começar a usar o app. Pode deixar vazio.</p>`}
   <div class="acts fim">${id?`<button class="btn d" onclick="delCartao('${id}')">Excluir</button>`:''}<button class="btn" onclick="salvarCartao('${id||''}')">Salvar</button></div>`);
 }
+// o cache do navegador pode segurar a página; isto passa por cima dele
+async function forcaAtualizar(){
+  toast('Buscando…');
+  try{
+    const r=await caches.keys(); await Promise.all(r.map(k=>caches.delete(k)));
+    const regs=navigator.serviceWorker?await navigator.serviceWorker.getRegistrations():[];
+    await Promise.all(regs.map(x=>x.unregister()));
+  }catch(e){}
+  location.replace(location.pathname+'?v='+Date.now());
+}
 function verComp(){
   abrir(cab('Último comprovante lido')+
    `<pre style="white-space:pre-wrap;font:12px/1.5 ui-monospace,monospace;background:var(--card2);padding:12px;border-radius:10px;overflow-x:auto">${esc(cfg.ultComp||'')}</pre>
@@ -2807,7 +2817,8 @@ function formAjustes(){
   <div class="acts"><button class="btn g" onclick="formSync()">${temSync()?'Gerenciar':'Configurar'}</button></div>
   <h4>Recomeçar</h4><p class="hint" style="padding-left:0">Apagar lançamentos, zerar o saldo anterior dos cartões ou limpar tudo.</p>
   <div class="acts"><button class="btn g" onclick="formRecomecar()">Opções de apagar</button></div>
-  <p class="hint" style="text-align:center;padding-top:14px">Versão ${VERSAO}</p>
+  <p class="hint" style="text-align:center;padding-top:14px">Versão ${VERSAO}
+  <a onclick="forcaAtualizar()" style="margin-left:8px">Buscar versão nova</a></p>
   <div class="acts fim"><button class="btn g" onclick="fechar()">Cancelar</button><button class="btn" onclick="salvarAjustes()">Salvar</button></div>`;
   abrir(h);
 }
