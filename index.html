@@ -2367,6 +2367,14 @@ function puxarTudo(){
   cfg.syncTs=0;salvarCfg();
   sincronizar();
 }
+// copiar de um campo: selecionar texto no celular é trabalho demais para isto
+function copia(id,ok){
+  const e=$('#'+id); if(!e||!e.value)return toast('Está vazio');
+  const feito=()=>toast(ok);
+  if(navigator.clipboard&&navigator.clipboard.writeText)
+    return navigator.clipboard.writeText(e.value).then(feito).catch(()=>{e.select();toast('Selecionado — toque em Copiar')});
+  e.select(); try{document.execCommand('copy');feito()}catch(x){toast('Selecionado — toque em Copiar')}
+}
 function salvarSync(testa){
   cfg.wkUrl=(val('sy_u')||'').trim().replace(/\/+$/,'');
   setWk(val('sy_t')||'');
