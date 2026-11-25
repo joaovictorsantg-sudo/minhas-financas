@@ -51,7 +51,7 @@ class Principal : AppCompatActivity() {
     receber(intent)
   }
 
-  override fun onNewIntent(novo: Intent?) {
+  override fun onNewIntent(novo: Intent) {
     super.onNewIntent(novo)
     intent = novo
     receber(novo)
