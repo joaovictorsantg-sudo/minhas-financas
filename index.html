@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v89 — 25/11';
+const VERSAO='v90 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -2240,7 +2240,8 @@ function formCartao(id){
 function verComp(){
   abrir(cab('Último comprovante lido')+
    `<pre style="white-space:pre-wrap;font:12px/1.5 ui-monospace,monospace;background:var(--card2);padding:12px;border-radius:10px;overflow-x:auto">${esc(cfg.ultComp||'')}</pre>
-    <div class="acts fim"><button class="btn" onclick="fechar()">Fechar</button></div>`);
+    <textarea id="comp_txt" style="position:absolute;left:-9999px">${esc(cfg.ultComp||'')}</textarea>
+    <div class="acts fim"><button class="btn g" onclick="copia('comp_txt','Texto copiado')">Copiar texto</button><button class="btn" onclick="fechar()">Fechar</button></div>`);
 }
 function voltaAoBanco(id){const c=cartao(id);if(!c)return;delete c.doBanco;salvarCfg();formCartao(id);toast('O banco volta a atualizar este cartão')}
 function salvarCartao(id){
