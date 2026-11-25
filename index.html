@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v86 — 25/11';
+const VERSAO='v87 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1755,6 +1755,10 @@ function leNotif(n){
   // transferência entre duas contas minhas, sem a marca do banco no alto:
   // não há no texto o que diga de qual lado o documento está
   const ambiguo=comprov&&!dono&&!!minhaEm(secR)&&!!minhaEm(secP);
+  // num comprovante as duas instituições aparecem, a minha e a do outro.
+  // Sem achar os lados, procurar nome de conta no texto inteiro acha a de
+  // qualquer um dos dois — é sorteio, e sorteio não se lança sozinho
+  const semLados=/comprovante/.test(semAcento(n.banco||''))&&!comprov;
   // num comprovante as duas instituições aparecem, e a minha é a do lado que
   // pagou quando o dinheiro saiu, a do lado que recebeu quando entrou
   const lado=comprov?(entrada?secR:secP):(()=>{
@@ -1777,7 +1781,7 @@ function leNotif(n){
   const busca=f=>entrada?f(cfg.contas):credito?(f(cfg.cartoes)||f(cfg.contas)):f(cfg.contas);
   const alvo=valido?{id:guardado}:busca(porNome);
   // o destino é certo quando foi escolhido antes ou quando o aviso o nomeia
-  const certo=!ambiguo&&(!!valido||!!busca(firme));
+  const certo=!ambiguo&&!semLados&&(!!valido||!!busca(firme));
   const desc=nomeNaNotif(n,entrada);
   // "Henrique Souza da Costa" no extrato parece um gasto com alguém; o que
   // aconteceu foi um Pix dele para você, e a direção importa mais que o nome
