@@ -130,6 +130,7 @@ h2 a{font-size:13px;font-weight:500;color:var(--acc);cursor:pointer;text-decorat
 .btn.s{width:auto;padding:8px 13px;font-size:13.5px;border-radius:10px}
 .acts{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
 .acts .btn{flex:1;min-width:92px}
+a.btn{display:block;text-align:center;text-decoration:none;box-sizing:border-box}
 .acts.fim{position:sticky;bottom:0;z-index:2;background:var(--base);margin-top:18px;
   padding:12px 0 calc(6px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line)}
 
@@ -210,7 +211,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v61 — 25/11';
+const VERSAO='v62 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -2136,7 +2137,8 @@ function formSync(){
     <div class="t2">Entra direto, com a categoria adivinhada. Transferência e repetido continuam de fora.</div></div></div>`:''}
   <div class="acts"><button class="btn" onclick="conectarBanco()">Conectar banco</button>
   ${cfg.bancos.length?`<button class="btn g" onclick="sincronizar()">Sincronizar agora</button>`:''}</div>
-  ${cfg.bancos.length?`<p class="hint" style="padding-left:0">A Pluggy relê seu banco uma vez por dia, e sincronizar lê o que ela guardou. <b>Reler</b>, ao lado de cada banco, pede uma leitura nova onde a conexão aceita — no plano gratuito ela só é feita em meu.pluggy.ai.</p>
+  ${cfg.bancos.length?`<p class="hint" style="padding-left:0">A Pluggy relê seu banco uma vez por dia, e sincronizar lê o que ela guardou. <b>Reler</b>, ao lado de cada banco, pede uma leitura nova onde a conexão aceita. No plano gratuito ela é feita no Meu Pluggy: atualize a conexão por lá e depois sincronize aqui.</p>
+  <div class="acts"><a class="btn g" href="https://meu.pluggy.ai" target="_blank" rel="noopener noreferrer">Abrir o Meu Pluggy</a></div>
   <div class="acts"><button class="btn g" onclick="puxarTudo()">Trazer o histórico inteiro</button></div>
   <p class="hint" style="padding-left:0">Esquece até onde já veio e pede de novo os últimos 12 meses. O que já está lançado é reconhecido e vem desmarcado.</p>`:''}
   <div class="acts fim"><button class="btn g" onclick="abrirAjustes()">Voltar</button></div>`);
@@ -2158,10 +2160,11 @@ async function relerBanco(id){
     if(/cant be update|cannot be updated|MeuPluggy/i.test(String(e.message||'')))
       return abrir(cab('Reler o '+esc(b.nome||'banco'))+
       `<p class="hint" style="padding-left:0">Esta conexão é do plano gratuito, e ela não aceita o pedido de releitura nem por aqui nem pelo conector. Nas palavras da própria Pluggy: os itens do Meu Pluggy só podem ser atualizados pelo aplicativo dela, e são atualizados uma vez por dia de todo jeito.</p>
-      <div class="note"><b>Como forçar agora</b>Entre em <b>meu.pluggy.ai</b>, abra a conexão do banco e atualize por lá. Depois volte e toque em Sincronizar.</div>
+      <div class="note"><b>Como forçar agora</b>Abra a conexão do banco no Meu Pluggy e atualize por lá — costuma ser uma seta circular ou "Atualizar" no card da conexão. Depois volte aqui e sincronize.</div>
+      <div class="acts"><a class="btn" href="https://meu.pluggy.ai" target="_blank" rel="noopener noreferrer">Abrir o Meu Pluggy</a></div>
       <p class="hint" style="padding-left:0">Mesmo assim, compra no crédito costuma levar um dia para o banco processar — até lá não existe nem para ele.</p>
-      <div class="acts"><button class="btn g" onclick="formSync()">Voltar</button>
-      <button class="btn" onclick="fechar();sincronizar()">Sincronizar assim mesmo</button></div>`);
+      <div class="acts fim"><button class="btn g" onclick="formSync()">Voltar</button>
+      <button class="btn g" onclick="fechar();sincronizar()">Sincronizar assim mesmo</button></div>`);
     return toast(msgErro(e.message));
   }
 }
