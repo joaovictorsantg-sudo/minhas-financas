@@ -133,7 +133,10 @@ que o banco oferece depois do envio traz valor, data e para quem foi.
 
 Compartilhar o mesmo comprovante duas vezes é fácil, e o identificador
 da transação que ele traz diz que é o mesmo movimento. Sem esse
-identificador, valem conta, dia, valor e lado. O identificador diz que é
+identificador, só o comprovante é comparado por conta, dia, valor e
+lado: a notificação sai da caixa quando é lançada e nunca volta, então
+dois avisos iguais são dois movimentos iguais — dois Pix de R$ 5 no
+mesmo dia acontecem. O identificador diz que é
 o mesmo movimento, não que esteja igual: reenviar um comprovante depois
 de o app aprender a lê-lo conserta o lançamento anterior em vez de virar
 um segundo.

@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v95 — 25/11';
+const VERSAO='v96 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1950,11 +1950,21 @@ function avisaNotifs(){
 // Entra direto só o que ele sabe onde pôr: destino já escolhido antes para
 // aquele banco, ou nome de conta reconhecido no próprio aviso. O resto espera,
 // porque lançar na conta errada é pior que esperar.
-// o mesmo movimento já lançado: pelo identificador quando ele existe, e
-// senão pelo que o define — mesma conta, mesmo dia, mesmo valor, mesmo lado
+/**
+ * O mesmo movimento já lançado. Pelo identificador, quando o documento
+ * traz um.
+ *
+ * Sem identificador, só o comprovante é comparado por conta, dia, valor e
+ * lado — ele é o único que pode ser enviado duas vezes. A notificação sai
+ * da caixa assim que é lançada e nunca volta, então dois avisos iguais são
+ * dois movimentos iguais, não um repetido: receber dois Pix de R$ 5 no
+ * mesmo dia é comum, e recusar o segundo é perder dinheiro de vista.
+ */
 function achaIgual(n,data){
-  return todos().find(t=>n.idTx?t.idTx===n.idTx
-    :(t.pg===n.pg&&t.data===data&&t.t===n.t&&Math.abs(r2(t.v)-r2(+n.valor))<0.005))||null;
+  if(n.idTx)return todos().find(t=>t.idTx===n.idTx)||null;
+  if(!/comprovante/.test(semAcento(n.banco||'')))return null;
+  return todos().find(t=>t.pg===n.pg&&t.data===data&&t.t===n.t
+    &&Math.abs(r2(t.v)-r2(+n.valor))<0.005)||null;
 }
 /**
  * O identificador diz que é o mesmo movimento; o resto pode ter mudado.
