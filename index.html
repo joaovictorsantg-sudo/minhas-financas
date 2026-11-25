@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v77 — 25/11';
+const VERSAO='v78 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1504,9 +1504,11 @@ function aplicaFaturas(lista){
     // o ajuste é a diferença até o total do banco, calculada sobre as compras
     // e não sobre si mesma: assim não depende de desfazer o de ontem
     const puro=faturas(c,true);
+    const aberta=fatAberta(c);
     fs.forEach(bl=>{
       if(bl.total==null)return;
       const F=chaveFat(c,bl); if(!F)return;
+      if(F===aberta)return; // a aberta ainda está sendo gasta: é o que foi lançado nela
       const v=r2(Math.abs(bl.total)-r2(puro[F]||0));
       if(Math.abs(v)>=0.005)c.aberturas[F]=v; else delete c.aberturas[F];
       // quem sabe se a fatura foi paga é o banco; sem isso todo histórico que
@@ -1536,8 +1538,6 @@ function aplicaContas(achadas,comFatura){
   // Onde o banco manda as faturas, as fechadas vêm exatas e a aberta é a soma
   // das compras que chegaram. Completar a aberta por saldo exigia somar o que
   // está em aberto, e uma fatura antiga marcada errado ia parar dentro dela.
-  const comBanco=new Set();
-  (comFatura||[]).forEach(({pg,faturas:fs})=>{ if(cartao(pg)&&(fs||[]).length)comBanco.add(pg) });
   (achadas||[]).forEach(a=>{
     if(!a.pg)return;
     if(a.tipo==='CREDIT'){
@@ -1555,16 +1555,15 @@ function aplicaContas(achadas,comFatura){
       // medir contra uma fatura só empurra para ela a dívida das outras. E o
       // ajuste é refeito, não somado — senão cada sincronização empilha mais
       // um, e o do mês anterior fica congelado numa fatura que já passou.
-      // sem faturas do banco, o saldo é a única medida que existe
-      if(a.saldo!=null&&c.doBanco!==false&&!comBanco.has(a.pg)){
+      // A fatura aberta é o que foi comprado nela, e ponto. O saldo do cartão
+      // é uma dívida total que muda a toda hora e inclui o que ainda nem
+      // apareceu; completar a fatura até ele enchia o mês de números sem
+      // lançamento por trás. Fatura fechada continua vindo do banco, exata.
+      if(c.auto&&c.auto.F){ // desfaz o que versões anteriores deixaram
         c.aberturas=c.aberturas||{};
-        if(c.auto&&c.auto.F)c.aberturas[c.auto.F]=r2((+c.aberturas[c.auto.F]||0)-(+c.auto.v||0));
-        const F=fatAberta(c), fs=faturas(c);
-        const devendo=r2(Object.keys(fs).filter(K=>!paga(c,K)).reduce((x,K)=>x+fs[K],0));
-        const v=r2(Math.abs(a.saldo)-devendo);
-        c.aberturas[F]=r2((+c.aberturas[F]||0)+v);
-        c.auto={F,v};
-        Object.keys(c.aberturas).forEach(K=>{if(Math.abs(c.aberturas[K])<0.005)delete c.aberturas[K]});
+        c.aberturas[c.auto.F]=r2((+c.aberturas[c.auto.F]||0)-(+c.auto.v||0));
+        if(Math.abs(c.aberturas[c.auto.F])<0.005)delete c.aberturas[c.auto.F];
+        delete c.auto;
       }
       n++;
     }else{
@@ -1688,7 +1687,8 @@ function leNotif(n){
   // a carteira do celular avisa a compra sem dizer o banco, e aproximação é
   // quase sempre crédito
   const carteira=/wallet|carteira|google pay|samsung pay/.test(semAcento(n.banco||''));
-  const credito=carteira
+  // "Pix no crédito" e Pix parcelado saem do cartão, não da conta
+  const credito=carteira||/pix no credito|pix parcelado|parcelamento/.test(t)
     ||(/(cartao|credito|aprovada|compra aprovada|fatura)/.test(t)&&!/debito em conta|conta corrente/.test(t));
   // o nome do cartão pode estar no próprio aviso, que é a pista melhor
   // "creditado na sua conta" não quer dizer a conta chamada "Conta": nome
@@ -2357,7 +2357,17 @@ function revisarPendente(){if(!pend)return;imp=pend;pend=null;formImportar()}
 async function syncAoAbrir(){
   if(!cfg.syncAuto||!temSync()||!cfg.bancos.length)return;
   if(!navigator.onLine)return;
-  if(cfg.syncTs&&Date.now()-cfg.syncTs<4*60*60*1000)return; // no máximo de 4 em 4 horas
+  // Perguntar quando a Pluggy leu o banco é uma chamada barata, e responde a
+  // única pergunta que importa: tem coisa nova lá? Se tem, sincroniza na hora,
+  // sem esperar as quatro horas. Se não tem, sincronizar não traria nada.
+  let novidade=false;
+  for(const b of cfg.bancos){
+    try{ const r=await wk('/item',{itemId:b.id});
+         if(r.atualizadoEm&&r.atualizadoEm!==b.lidoEm){b.lidoEm=r.atualizadoEm;novidade=true} }
+    catch(e){}
+  }
+  if(novidade)salvarCfg();
+  if(!novidade&&cfg.syncTs&&Date.now()-cfg.syncTs<4*60*60*1000)return;
   try{await sincronizar(true)}catch(e){sincronizando=false}
 }
 function formSync(){

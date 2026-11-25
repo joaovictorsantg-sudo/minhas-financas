@@ -234,6 +234,15 @@ gratuito não aceita por caminho nenhum, e nesse caso o app explica que
 ela é feita em meu.pluggy.ai. O que o banco ainda não processou continua
 sem aparecer de qualquer forma.
 
+Ao abrir, o app pergunta quando a Pluggy leu cada banco. Se leu depois
+da última sincronização, sincroniza na hora; se não, não há o que
+buscar. É a diferença entre sincronizar de hora marcada e sincronizar
+quando há motivo.
+
+A fatura em aberto é o que foi lançado nela, nunca o saldo do cartão —
+esse é uma dívida total que muda a toda hora. Do banco vêm as faturas
+fechadas, exatas.
+
 A sincronização acontece sozinha ao abrir o app, no máximo de quatro em
 quatro horas, e nunca interrompe: se vier coisa nova, a tela inicial
 avisa e você revisa quando quiser. Navegador não roda app em segundo
