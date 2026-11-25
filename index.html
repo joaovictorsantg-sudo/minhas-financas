@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v70 — 25/11';
+const VERSAO='v71 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -2306,6 +2306,9 @@ function formSync(){
   `<p class="hint" style="padding-left:0">O app conversa com um backend seu, que guarda o segredo da Pluggy. Sem ele, nada daqui funciona.</p>
   <label>Endereço do backend</label><input id="sy_u" value="${esc(cfg.wkUrl||'')}" placeholder="https://algo.workers.dev" autocomplete="off" spellcheck="false">
   <label>Token do app</label><input id="sy_t" value="${esc(getWk())}" placeholder="cole o APP_TOKEN" autocomplete="off" spellcheck="false">
+  ${cfg.wkUrl||getWk()?`<div class="chips"><button class="btn g s" onclick="copia('sy_u','Endereço copiado')">Copiar endereço</button>
+  <button class="btn g s" onclick="copia('sy_t','Token copiado')">Copiar token</button></div>
+  <p class="hint" style="padding-left:0">Para levar a configuração a outro aparelho, ou do navegador para o aplicativo: o token não vai no backup, de propósito.</p>`:''}
   <div class="acts"><button class="btn g" onclick="salvarSync()">Salvar</button><button class="btn g" onclick="salvarSync(1)">Salvar e testar</button></div>
   <h4>Bancos conectados</h4>`+
   (cfg.bancos.length?`<div class="grp"><div class="rows">`+cfg.bancos.map(b=>
