@@ -210,7 +210,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v57 — 25/11';
+const VERSAO='v58 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -459,9 +459,11 @@ function pagaPor(c,F){
 }
 const pagaEm=(c,F)=>{const v=cfg.faturasPagas[pagaKey(c,F)];return (v&&typeof v==='object'&&v.d)||''};
 const vencISO=(c,F)=>{const mv=mesVenc(c,F);return mv+'-'+p2(Math.min(c.vence,diasNo(mv)))};
-function faturas(c){
+// semAjuste: só o que foi comprado, sem o saldo anterior. É contra isso que se
+// mede a diferença até o total que o banco informa.
+function faturas(c,semAjuste){
   const m={};
-  Object.keys(c.aberturas||{}).forEach(F=>{const K=proxFat(c,F);m[K]=r2((m[K]||0)+c.aberturas[F])});
+  if(!semAjuste)Object.keys(c.aberturas||{}).forEach(F=>{const K=proxFat(c,F);m[K]=r2((m[K]||0)+c.aberturas[F])});
   todos().forEach(tx=>{if(tx.pg!==c.id||tx.t!=='d')return;partes(tx).forEach(p=>m[p.fat]=r2((m[p.fat]||0)+p.v))});
   return m;
 }
@@ -1463,25 +1465,21 @@ function aplicaFaturas(lista){
   (lista||[]).forEach(({pg,faturas:fs})=>{
     const c=cartao(pg); if(!c||!(fs||[]).length)return;
     c.datas=c.datas||{}; c.aberturas=c.aberturas||{};
-    // desfaz o ajuste por saldo de versões anteriores: aqui ele não vale mais
-    if(c.auto&&c.auto.F){ c.aberturas[c.auto.F]=r2((+c.aberturas[c.auto.F]||0)-(+c.auto.v||0)); delete c.auto }
-    Object.keys(c.autoF||{}).forEach(F=>{c.aberturas[F]=r2((+c.aberturas[F]||0)-c.autoF[F])});
-    c.autoF={};
-    if(c.doBanco!==false){
-      fs.forEach(bl=>{
-        const F=chaveFat(c,bl); if(!F||!bl.fecha||!bl.vence)return;
-        c.datas[F]={f:+bl.fecha.slice(8,10),v:+bl.vence.slice(8,10)};
-      });
-      // a fatura aberta ainda não foi emitida: o ciclo dela é o da última que foi
-      const ult=fs.filter(bl=>bl.fecha&&bl.vence).sort((x,y)=>x.fecha.localeCompare(y.fecha)).pop();
-      if(ult){c.fecha=+ult.fecha.slice(8,10);c.vence=+ult.vence.slice(8,10)}
-    }
-    const atuais=faturas(c); // só depois das datas, que mudam onde cada compra cai
+    delete c.auto; delete c.autoF; // bookkeeping de versões anteriores
+    // as datas da fatura emitida valem para aquele mês; o ciclo corrente do
+    // cartão vem da conta, que é o que o banco diz estar valendo agora
+    if(c.doBanco!==false)fs.forEach(bl=>{
+      const F=chaveFat(c,bl); if(!F||!bl.fecha||!bl.vence)return;
+      c.datas[F]={f:+bl.fecha.slice(8,10),v:+bl.vence.slice(8,10)};
+    });
+    // o ajuste é a diferença até o total do banco, calculada sobre as compras
+    // e não sobre si mesma: assim não depende de desfazer o de ontem
+    const puro=faturas(c,true);
     fs.forEach(bl=>{
       if(bl.total==null)return;
       const F=chaveFat(c,bl); if(!F)return;
-      const v=r2(Math.abs(bl.total)-r2(atuais[F]||0));
-      if(Math.abs(v)>=0.005){c.aberturas[F]=r2((+c.aberturas[F]||0)+v); c.autoF[F]=v}
+      const v=r2(Math.abs(bl.total)-r2(puro[F]||0));
+      if(Math.abs(v)>=0.005)c.aberturas[F]=v; else delete c.aberturas[F];
       // quem sabe se a fatura foi paga é o banco; sem isso todo histórico que
       // ele manda volta marcado em aberto
       const K=pagaKey(c,F), reg=cfg.faturasPagas[K];
@@ -1509,26 +1507,20 @@ function aplicaContas(achadas,comFatura){
   // Onde o banco manda as faturas, as fechadas vêm exatas e a aberta é a soma
   // das compras que chegaram. Completar a aberta por saldo exigia somar o que
   // está em aberto, e uma fatura antiga marcada errado ia parar dentro dela.
-  const comBanco=new Set(), datouBanco=new Set();
-  (comFatura||[]).forEach(({pg,faturas:fs})=>{
-    if(!cartao(pg)||!(fs||[]).length)return;
-    comBanco.add(pg);
-    if(fs.some(bl=>bl.fecha&&bl.vence))datouBanco.add(pg);
-  });
+  const comBanco=new Set();
+  (comFatura||[]).forEach(({pg,faturas:fs})=>{ if(cartao(pg)&&(fs||[]).length)comBanco.add(pg) });
   (achadas||[]).forEach(a=>{
     if(!a.pg)return;
     if(a.tipo==='CREDIT'){
       const c=cartao(a.pg); if(!c)return;
       if(c.doBanco!==false){ // datas corrigidas à mão mandam mais que as do banco
         if(a.limite>0)c.limite=r2(a.limite);
-        // a data que vem com a conta é a do ciclo atual segundo o banco, e às
-        // vezes é a antiga; a das faturas emitidas é o que de fato aconteceu
-        if(!datouBanco.has(a.pg)){
-          const dF=a.fecha&&/^\d{4}-\d{2}-\d{2}/.test(a.fecha)?+a.fecha.slice(8,10):0;
-          const dV=a.vence&&/^\d{4}-\d{2}-\d{2}/.test(a.vence)?+a.vence.slice(8,10):0;
-          if(dF>=1&&dF<=31)c.fecha=dF;
-          if(dV>=1&&dV<=31)c.vence=dV;
-        }
+        // a conta informa o ciclo que está valendo agora; a última fatura
+        // emitida é o ciclo anterior, e logo depois de uma mudança são outros
+        const dF=a.fecha&&/^\d{4}-\d{2}-\d{2}/.test(a.fecha)?+a.fecha.slice(8,10):0;
+        const dV=a.vence&&/^\d{4}-\d{2}-\d{2}/.test(a.vence)?+a.vence.slice(8,10):0;
+        if(dF>=1&&dF<=31)c.fecha=dF;
+        if(dV>=1&&dV<=31)c.vence=dV;
       }
       // O saldo de um cartão é tudo o que se deve, não só a fatura aberta:
       // medir contra uma fatura só empurra para ela a dívida das outras. E o
