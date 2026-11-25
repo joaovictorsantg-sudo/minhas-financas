@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v72 — 25/11';
+const VERSAO='v73 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -327,6 +327,8 @@ async function buscarCotacoes(auto){
 function formToken(){
   abrir(cab('Token da brapi')+`<p class="hint" style="padding-left:0">ITUB4 funciona sem token. Para WEGE3, CPLE3 e qualquer outra ação, crie um token gratuito em brapi.dev e cole aqui. Ele fica só neste aparelho.</p>
   <label>Token</label><input id="tk_v" value="${esc(getTk())}" placeholder="cole aqui" autocomplete="off" spellcheck="false">
+  ${getTk()?`<div class="chips"><button class="btn g s" onclick="copia('tk_v','Token copiado')">Copiar token</button></div>
+  <p class="hint" style="padding-left:0">Para levar a outro aparelho: como o do backend, ele não vai no backup.</p>`:''}
   <p class="hint" style="padding-left:0"><a href="https://brapi.dev" target="_blank" rel="noopener" style="color:var(--acc)">Abrir brapi.dev para criar o token</a></p>
   <div class="acts fim"><button class="btn g" onclick="fechar()">Cancelar</button><button class="btn" onclick="salvarToken()">Salvar e buscar</button></div>`);
 }
