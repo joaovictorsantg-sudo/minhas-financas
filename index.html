@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v76 — 25/11';
+const VERSAO='v77 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -238,7 +238,7 @@ const r2=v=>Math.round(v*100)/100;
 const r4=v=>Math.round(v*10000)/10000;
 
 const DEF={
-  regras:[], destNotif:{}, salario:0, metaInvest:0, cotAt:'', cotTs:0, salarioQuando:'pu', nome:'', wkUrl:'', bancos:[], syncAuto:true, syncDireto:false, syncTs:0,
+  regras:[], destNotif:{}, notifDireto:false, salario:0, metaInvest:0, cotAt:'', cotTs:0, salarioQuando:'pu', nome:'', wkUrl:'', bancos:[], syncAuto:true, syncDireto:false, syncTs:0,
   contas:[
     {id:'conta',emoji:'🏦',nome:'Conta',saldo:0},
     {id:'dinheiro',emoji:'💵',nome:'Dinheiro',saldo:0}
@@ -399,11 +399,11 @@ function iniciar(){
   }
   const velho=!cfg.cotTs||(Date.now()-cfg.cotTs)>15*60*1000;
   if(velho)buscarCotacoes(true);
-  syncAoAbrir();
+  syncAoAbrir(); notifsAoAbrir();
   addEventListener('visibilitychange',()=>{
     if(document.visibilityState!=='visible')return;
     if(!cfg.cotTs||(Date.now()-cfg.cotTs)>15*60*1000)buscarCotacoes(true);
-    syncAoAbrir();
+    syncAoAbrir(); notifsAoAbrir();
   });
 }
 
@@ -1760,6 +1760,25 @@ function avisaNotifs(){
   return `<div class="note" style="border-left-color:var(--acc)"><b>${ns.length} ${ns.length===1?'notificação do banco':'notificações do banco'}</b>${
     ns.length===1?'Chegou uma notificação de movimento':'Chegaram notificações de movimento'} que o app ainda não lançou. <a onclick="formNotifs()">Ver e lançar</a></div>`;
 }
+// Entra direto só o que ele sabe onde pôr: destino já escolhido antes para
+// aquele banco, ou nome de conta reconhecido no próprio aviso. O resto espera,
+// porque lançar na conta errada é pior que esperar.
+function notifsAoAbrir(){
+  if(!cfg.notifDireto)return;
+  const ns=notifs(); if(!ns.length)return;
+  const lidos=ns.map(n=>({...n, ...leNotif(n)}));
+  const certos=lidos.filter(n=>n.pg&&(cfg.destNotif||{})[chaveNotif(n,n.t==='r',!!cartao(n.pg))]===n.pg);
+  if(!certos.length)return;
+  certos.forEach(n=>{
+    const data=new Date(+n.quando||Date.now()).toLocaleDateString('sv-SE');
+    const tx={id:uid(),t:n.t,v:r2(+n.valor),desc:n.desc,cat:n.cat,pg:n.pg,data};
+    if(n.t==='d'&&cartao(n.pg))tx.parc=1;
+    const K=mk(data);meses[K]=(meses[K]||[]).concat(tx);
+  });
+  try{ Aparelho.descartar(JSON.stringify(certos.map(n=>n.id))) }catch(e){}
+  cache();render();
+  toast(certos.length+(certos.length===1?' lançamento do banco':' lançamentos do banco'));
+}
 let rascNotifs=null;
 function formNotifs(){
   const ns=notifs();
@@ -2579,7 +2598,11 @@ function formAjustes(){
     ? 'O app está recebendo as notificações dos seus bancos e guarda as que têm valor, para você lançar quando abrir. Elas ficam só neste aparelho.'
     : 'Com a permissão de leitura de notificações, a compra no crédito aparece aqui no momento em que o banco avisa, sem esperar o dia que ele leva para processar.'}</p>
   <div class="acts"><button class="btn ${podeOuvir()?'g':''}" onclick="Aparelho.pedirPermissao()">${podeOuvir()?'Rever a permissão':'Dar a permissão'}</button>
-  ${notifs().length?`<button class="btn g" onclick="formNotifs()">Ver ${notifs().length} esperando</button>`:''}</div>`:''}
+  ${notifs().length?`<button class="btn g" onclick="formNotifs()">Ver ${notifs().length} esperando</button>`:''}</div>
+  ${podeOuvir()?`<div class="ilin" style="border-bottom:0" onclick="cfg.notifDireto=!cfg.notifDireto;salvarCfg();abrirAjustes()">
+    <button class="ick" style="${cfg.notifDireto?'':'background:none;border-color:var(--line2)'}">${cfg.notifDireto?'✓':''}</button>
+    <div class="imid"><div class="t1">Lançar sem revisar</div>
+    <div class="t2">Entra direto quando o app abre, mas só o que vem de um banco cujo destino você já escolheu uma vez. O que ele não souber onde pôr continua esperando.</div></div></div>`:''}`:''}
 
   <h4>Minhas regras de categoria</h4><p class="hint" style="padding-left:0">${(cfg.regras||[]).length?(cfg.regras.length===1?'1 regra sua':cfg.regras.length+' regras suas')+'. O app usa elas antes das próprias.':'Ensine o app a reconhecer o que só você sabe, como um Pix que é sempre a mesma conta.'}</p>
   <div class="acts"><button class="btn g" onclick="formRegras()">Ver e criar regras</button></div>
