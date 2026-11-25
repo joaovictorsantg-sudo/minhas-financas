@@ -123,6 +123,12 @@ app sob a barra de status e a de gestos, então a janela inclui o espaço
 delas: o layout reserva esse espaço pelas medidas que o sistema informa,
 com um mínimo próprio para quando ele informa zero.
 
+Gasto no crédito lançado à mão na hora da compra é reconhecido quando o
+banco enfim o entrega, dias depois e com outro nome: casam por cartão,
+valor e proximidade de data. O lançamento continua sendo o seu, com a
+sua descrição e categoria, e passa a carregar o identificador do banco
+para não voltar como novidade.
+
 O extrato filtra por três eixos ao mesmo tempo: o que (gasto, entrada,
 aporte), onde (débito, crédito ou uma conta específica) e categoria. Os
 filtros ativos ficam visíveis como etiquetas, cada uma com o seu próprio

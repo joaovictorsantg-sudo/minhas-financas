@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v63 — 25/11';
+const VERSAO='v64 — 25/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -223,6 +223,7 @@ const p2=n=>String(n).padStart(2,'0');
 const hoje=()=>{const d=new Date();return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate())};
 const mk=d=>d.slice(0,7);
 const addM=(k,n)=>{let[y,m]=k.split('-').map(Number);m+=n;y+=Math.floor((m-1)/12);m=((m-1)%12+12)%12+1;return y+'-'+p2(m)};
+const difD=(a,b)=>Math.round((new Date(b+'T12:00')-new Date(a+'T12:00'))/864e5);
 const difM=(a,b)=>{const[y1,m1]=a.split('-').map(Number),[y2,m2]=b.split('-').map(Number);return (y2-y1)*12+(m2-m1)};
 const MES=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
 const nomeMes=k=>{const[y,m]=k.split('-');return MES[m-1]+' de '+y};
@@ -1735,7 +1736,7 @@ function formImportar(){
     h+=`<div class="ilin ${t.usar?'':'off'}">
       <button class="ick" onclick="alterna(${i})" aria-label="${t.usar?'Tirar':'Incluir'}">${t.usar?'✓':''}</button>
       <div class="imid"><div class="t1">${esc(t.desc)}</div>
-        <div class="t2">${dataBR(t.data)}${t.pg?' · '+esc(pgNome(t.pg)):''}${t.met?' · '+t.met:''}${t.dup?' · já lançado':''}${t.quita?' · quita a fatura de '+curtoMes(mesVenc(cartao(t.quita.cid),t.quita.F))+' do '+esc(cartao(t.quita.cid).nome):t.nat?' · '+ROTULO[t.nat]:''}${pag&&!t.nat?' · pagamento de fatura':''}</div></div>
+        <div class="t2">${dataBR(t.data)}${t.pg?' · '+esc(pgNome(t.pg)):''}${t.met?' · '+t.met:''}${t.dup?' · já lançado':t.mao?' · você já lançou à mão':''}${t.quita?' · quita a fatura de '+curtoMes(mesVenc(cartao(t.quita.cid),t.quita.F))+' do '+esc(cartao(t.quita.cid).nome):t.nat?' · '+ROTULO[t.nat]:''}${pag&&!t.nat?' · pagamento de fatura':''}</div></div>
       <div class="iend"><div class="vmid ${ent?'up':''}">${ent?'+':'−'}${brl(Math.abs(vv))}</div>
         ${(!ent||!ehCartao)&&!t.quita?`<select class="icat" onchange="mudaCat(${i},this.value)">${(ent?RECS:cfg.categorias).map(c=>`<option value="${c.id}" ${t.cat===c.id?'selected':''}>${c.emoji} ${esc(c.nome)}</option>`).join('')}</select>`:''}</div></div>`;
   });
@@ -1763,10 +1764,28 @@ function confirmarImport(){
   // sincronização pode não ter lançamento novo e ainda assim ter saldo e posição a acertar
   const temAcerto=imp.sync&&imp.acertar&&
     (((imp.achadas||[]).some(a=>a.pg))||((imp.invs||[]).some(i=>i.ativo!=='-')));
-  if(!n&&!quitadas&&!temAcerto){fechar();return toast('Nada marcado para importar')}
+  const temMao=(imp.itens||[]).some(t=>t.mao);
+  if(!n&&!quitadas&&!temAcerto&&!temMao){fechar();return toast('Nada marcado para importar')}
   Object.keys(porMes).forEach(k=>{meses[k]=(meses[k]||[]).concat(porMes[k])});
+  // o que foi lançado à mão adota o id e a data do banco: deixa de ser palpite
+  // e para de voltar como novidade. Antes do acerto de fatura, que usa a data.
+  let casados=0;
+  (imp.itens||[]).forEach(t=>{
+    if(!t.mao)return;
+    let achou=null, de='';
+    Object.keys(meses).forEach(K=>{const x=meses[K].find(y=>y.id===t.mao);if(x){achou=x;de=K}});
+    if(!achou)return;
+    achou.k=t.k;
+    if(achou.data!==t.data){
+      achou.data=t.data;
+      const para=mk(t.data);
+      if(para!==de){meses[de]=meses[de].filter(y=>y.id!==achou.id);meses[para]=(meses[para]||[]).concat(achou)}
+    }
+    casados++;
+  });
   let msg=n?(n+(n===1?' lançamento importado':' lançamentos importados')):'Nada novo para lançar';
   if(quitadas)msg+=', '+quitadas+(quitadas===1?' fatura quitada':' faturas quitadas');
+  if(casados)msg+=', '+casados+(casados===1?' já era seu lançamento':' já eram seus lançamentos');
   if(imp.saldo!=null&&imp.ajusta&&!ehCartao){
     const c=conta(imp.pg);
     if(c){c.saldo=r2((+c.saldo||0)+(imp.saldo-saldoConta(imp.pg)));msg+=', saldo acertado'}
@@ -2107,6 +2126,19 @@ async function sincronizar(auto){
   itens.sort((a,b)=>a.data.localeCompare(b.data));
   const antigos=todos();
   const jaTem=new Set(antigos.map(x=>x.k));
+  // Gasto no crédito demora um dia para o banco processar, então quem quer ver
+  // na hora lança à mão. Quando o banco enfim manda o mesmo gasto, ele vem com
+  // outra descrição e às vezes outro dia: casar por valor e proximidade evita
+  // a escolha entre lançar duas vezes ou não lançar na hora.
+  const aMao=antigos.filter(x=>x.t==='d'&&!x.k&&cartao(x.pg));
+  const casadosMao=new Set();
+  const casaMao=t=>{
+    if(!(t.v<0)||!cartao(t.pg))return '';
+    const v=r2(Math.abs(t.v));
+    const x=aMao.find(y=>!casadosMao.has(y.id)&&y.pg===t.pg&&r2(y.v)===v&&Math.abs(difD(y.data,t.data))<=5);
+    if(!x)return '';
+    casadosMao.add(x.id); return x.id;
+  };
   // Reconectar o banco repete os mesmos lançamentos com ids novos, e por isso
   // o conteúdo também conta. Mas duas passagens iguais no mesmo dia são duas
   // passagens: o que importa é quantas já existem, não se alguma existe.
@@ -2119,7 +2151,8 @@ async function sincronizar(auto){
     const nat=natureza(t.desc)||(cartao(t.pg)&&String(t.tp||'').toUpperCase()==='CREDIT'?'fatura':'');
     const hh=semOrigem(t), ja=(usados[hh]=(usados[hh]||0)+1);
     const dup=jaTem.has(k)||ja<=(quantos[hh]||0);
-    return {...t,k,dup,nat,quita:null,met:'',usar:!dup&&!nat,cat:categorizar(t.desc,t.v>0,t.v)};
+    const mao=dup?'':casaMao(t);
+    return {...t,k,dup,mao,nat,quita:null,met:'',usar:!dup&&!mao&&!nat,cat:categorizar(t.desc,t.v>0,t.v)};
   })};
   const novos=montado.itens.filter(t=>t.usar).length+semDestino+invsAg.length;
   if(auto){
