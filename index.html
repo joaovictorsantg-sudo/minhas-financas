@@ -210,7 +210,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v55 — 24/11';
+const VERSAO='v56 — 24/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1933,11 +1933,11 @@ const getWk=()=>{try{return localStorage.getItem(WKKEY)||''}catch(e){return ''}}
 const setWk=v=>{try{v?localStorage.setItem(WKKEY,v.trim()):localStorage.removeItem(WKKEY)}catch(e){}};
 const temSync=()=>!!(cfg.wkUrl&&getWk());
 
-async function wk(caminho,params){
+async function wk(caminho,params,opts){
   if(!temSync())throw new Error('sem_config');
   const base=cfg.wkUrl.replace(/\/+$/,'');
   const q=params?('?'+new URLSearchParams(params)):'';
-  const r=await fetch(base+caminho+q,{headers:{'x-app-token':getWk()}});
+  const r=await fetch(base+caminho+q,{...(opts||{}),headers:{'x-app-token':getWk()}});
   const d=await r.json().catch(()=>({}));
   if(r.status===401)throw new Error('token_recusado');
   if(!r.ok)throw new Error(d.detalhe||d.erro||('http_'+r.status));
@@ -2078,6 +2078,7 @@ function msgErro(m){
   if(/^http_/.test(m))return 'o backend devolveu erro '+m.slice(5);
   if(/LOGIN_ERROR|INVALID_CREDENTIALS/i.test(m))return 'a conexão com o banco expirou — reconecte em meu.pluggy.ai';
   if(/UPDATING|OUTDATED/i.test(m))return 'o banco ainda está atualizando os dados — tente de novo em alguns minutos';
+  if(/rate.?limit|too many|\b429\b/i.test(m))return 'a Pluggy já foi consultada há pouco; vale uma vez por hora';
   if(/Failed to fetch|NetworkError/i.test(m))return 'não alcancei o backend';
   return curto(m);
 }
@@ -2112,9 +2113,26 @@ function formSync(){
     <div class="t2">Entra direto, com a categoria adivinhada. Transferência e repetido continuam de fora.</div></div></div>`:''}
   <div class="acts"><button class="btn" onclick="conectarBanco()">Conectar banco</button>
   ${cfg.bancos.length?`<button class="btn g" onclick="sincronizar()">Sincronizar agora</button>`:''}</div>
-  ${cfg.bancos.length?`<div class="acts"><button class="btn g" onclick="puxarTudo()">Trazer o histórico inteiro</button></div>
+  ${cfg.bancos.length?`<div class="acts"><button class="btn g" onclick="pedirAtualizacao()">Pedir ao banco agora</button></div>
+  <p class="hint" style="padding-left:0">A Pluggy relê seu banco a cada 24 horas. Isto pede que releia agora — leva alguns minutos, e depois é só sincronizar. Vale uma vez por hora.</p>
+  <div class="acts"><button class="btn g" onclick="puxarTudo()">Trazer o histórico inteiro</button></div>
   <p class="hint" style="padding-left:0">Esquece até onde já veio e pede de novo os últimos 12 meses. O que já está lançado é reconhecido e vem desmarcado.</p>`:''}
   <div class="acts fim"><button class="btn g" onclick="abrirAjustes()">Voltar</button></div>`);
+}
+// A Pluggy guarda uma foto do banco e a refaz de tempos em tempos. Sincronizar
+// lê essa foto; isto pede uma foto nova.
+async function pedirAtualizacao(){
+  if(!cfg.bancos.length)return;
+  toast('Pedindo ao banco…');
+  let ok=0; const ruins=[];
+  for(const b of cfg.bancos){
+    try{ await wk('/atualizar',{itemId:b.id},{method:'POST'}); ok++; b.pedidoEm=Date.now() }
+    catch(e){ ruins.push((b.nome||'Banco')+': '+msgErro(e.message)) }
+  }
+  salvarCfg();
+  if(ok&&!ruins.length)return toast(ok===1?'Pedido feito. Sincronize daqui a alguns minutos.':ok+' bancos avisados. Sincronize daqui a alguns minutos.');
+  if(ok)return toast(ok+' de '+cfg.bancos.length+' avisados. '+ruins[0]);
+  toast(ruins[0]||'Não consegui pedir agora');
 }
 function puxarTudo(){
   cfg.bancos.forEach(b=>{b.desde='';b.desdeC={}});

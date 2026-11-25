@@ -203,6 +203,10 @@ quê. Sem isso a falha passava calada: bastava o banco devolver os
 investimentos para a tela abrir como se tudo tivesse vindo, e o extrato
 que faltava só aparecia como ausência.
 
+Sincronizar lê a cópia que a Pluggy mantém do banco, e ela é refeita a
+cada 24 horas. Pedir ao banco agora força essa releitura, uma vez por
+hora — o que o banco ainda não processou continua sem aparecer.
+
 A sincronização acontece sozinha ao abrir o app, no máximo de quatro em
 quatro horas, e nunca interrompe: se vier coisa nova, a tela inicial
 avisa e você revisa quando quiser. Navegador não roda app em segundo

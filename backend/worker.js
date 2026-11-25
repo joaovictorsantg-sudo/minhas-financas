@@ -103,6 +103,21 @@ export default {
         return json({ faturas: tudo });
       }
 
+      // A Pluggy só relê o banco de tempos em tempos. Isto pede que releia agora.
+      if (rota === '/atualizar') {
+        const itemId = url.searchParams.get('itemId');
+        if (!itemId) return json({ erro: 'falta_itemId' }, 400);
+        const r = await pluggy(env, `/items/${encodeURIComponent(itemId)}`, {
+          method: 'PATCH',
+          body: '{}',
+        });
+        return json({
+          status: r.status,
+          execucao: r.executionStatus,
+          atualizadoEm: r.lastUpdatedAt ?? null,
+        });
+      }
+
       if (rota === '/item') {
         const itemId = url.searchParams.get('itemId');
         if (!itemId) return json({ erro: 'falta_itemId' }, 400);
