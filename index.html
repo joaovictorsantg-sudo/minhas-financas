@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v99 — 26/11';
+const VERSAO='v100 — 26/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1907,10 +1907,11 @@ function leNotif(n){
   const busca=f=>entrada?f(cfg.contas):credito?(f(cfg.cartoes)||f(cfg.contas)):f(cfg.contas);
   // no comprovante, a ponta que é minha está escrita: vale mais que o
   // destino que aquele banco costuma ter
-  const alvo=dono?dono.x:valido?{id:guardado}:busca(porNome);
-  // o destino é certo quando está no documento, foi escolhido antes, ou o
-  // aviso nomeia a conta
-  const certo=!ambiguo&&!semLados&&(!!dono||!!valido||!!busca(firme));
+  // o aviso que nomeia o cartão fala desta compra; o destino aprendido fala
+  // de um costume. Quando os dois discordam, quem viu a compra tem razão
+  const noTexto=busca(firme);
+  const alvo=dono?dono.x:noTexto?noTexto:valido?{id:guardado}:busca(porNome);
+  const certo=!ambiguo&&!semLados&&(!!dono||!!noTexto||!!valido);
   const desc=(comprov&&nomeNaSecao(entrada?pc.P:pc.R))||nomeNaNotif(n,entrada);
   // "Henrique Souza da Costa" no extrato parece um gasto com alguém; o que
   // aconteceu foi um Pix dele para você, e a direção importa mais que o nome
@@ -2013,8 +2014,17 @@ function nomeNaNotif(n,entrada){
 }
 // uma escolha por banco e por natureza: a conta que recebe o Pix do PicPay não
 // é a mesma que paga o cartão dele
-const chaveNotif=(n,entrada,credito)=>
-  semAcento(n.banco||'?')+'|'+(entrada?'entrada':credito?'cartao':'conta');
+// a carteira do celular avisa por todos os cartões com o mesmo nome de app:
+// o que distingue um do outro é o final impresso no próprio aviso
+const finalCartao=n=>{
+  const m=semAcento((n.titulo||'')+' '+(n.texto||''))
+    .match(/(?:[•*x·\-]{2,}\s*|final\s+|terminado em\s+)(\d{4})\b/);
+  return m?m[1]:'';
+};
+const chaveNotif=(n,entrada,credito)=>{
+  const fim=credito?finalCartao(n):'';
+  return semAcento(n.banco||'?')+'|'+(entrada?'entrada':credito?'cartao':'conta')+(fim?'|'+fim:'');
+};
 function avisaNotifs(){
   const ns=notifs(); if(!ns.length)return '';
   return `<div class="note" style="border-left-color:var(--acc)"><b>${ns.length} ${ns.length===1?'notificação do banco':'notificações do banco'}</b>${

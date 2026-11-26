@@ -179,6 +179,12 @@ pelo nome da conta no texto, ou pela instituição do lado dele no
 comprovante. Cair na primeira conta da lista por falta de pista não é
 saber, e esse continua esperando revisão.
 
+A carteira do celular avisa por todos os cartões com o mesmo nome de app,
+e o que distingue um do outro é o final impresso no aviso — sem isso, um
+destino escolhido uma vez levava junto as compras do outro cartão. E
+quando o aviso nomeia o cartão, é ele quem decide: o aviso fala desta
+compra, o destino aprendido fala de um costume.
+
 Aviso de banco cujo destino já foi
 escolhido uma vez pode entrar sem revisão, se a pessoa quiser; o que o
 app não sabe onde pôr continua esperando, porque lançar na conta errada
