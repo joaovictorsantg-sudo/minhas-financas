@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v98 — 25/11';
+const VERSAO='v99 — 26/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -238,7 +238,7 @@ const r2=v=>Math.round(v*100)/100;
 const r4=v=>Math.round(v*10000)/10000;
 
 const DEF={
-  regras:[], destNotif:{}, notifDireto:true, ultComp:'', vistoVer:'', salario:0, metaInvest:0, cotAt:'', cotTs:0, salarioQuando:'pu', nome:'', wkUrl:'', bancos:[], syncAuto:true, syncDireto:false, syncTs:0,
+  regras:[], destNotif:{}, notifDireto:true, ultComp:'', ultPromo:'', promoFora:0, vistoVer:'', salario:0, metaInvest:0, cotAt:'', cotTs:0, salarioQuando:'pu', nome:'', wkUrl:'', bancos:[], syncAuto:true, syncDireto:false, syncTs:0,
   contas:[
     {id:'conta',emoji:'🏦',nome:'Conta',saldo:0},
     {id:'dinheiro',emoji:'💵',nome:'Dinheiro',saldo:0}
@@ -557,6 +557,50 @@ function sugereOrc(n){
   return {disp,ms:M.ms,dia:M.dia,dias:M.dias,soma:r2(somaN+precOut),fator,prec,proj:M.proj,
     prop,total:r2(Object.values(prop).reduce((a,b)=>a+b,0))};
 }
+/**
+ * Quanto comprar por mês em cada cartão.
+ *
+ * O cartão não cria dinheiro, só adia a saída dele: o teto de todos os
+ * cartões somados é o que sobra do salário depois da meta de investir. Cada
+ * cartão fica com a fatia que ele de fato usa, porque é assim que a conta
+ * fecha sem obrigar ninguém a mudar de hábito, e nunca acima do limite —
+ * que é um teto que o banco já impôs.
+ */
+function mediaCartao(n){
+  const atual=mk(hoje());
+  const fech=Object.keys(meses).filter(k=>k<atual&&(meses[k]||[]).length).sort().slice(-(n||6));
+  const cart={}, visto={}; let tudo=0;
+  fech.forEach((k,i)=>(meses[k]||[]).forEach(t=>{
+    if(t.t!=='d')return;
+    tudo+=(+t.v||0);
+    if(!cartao(t.pg))return;
+    cart[t.pg]=cart[t.pg]||[];cart[t.pg][i]=(cart[t.pg][i]||0)+(+t.v||0);
+    if(visto[t.pg]==null)visto[t.pg]=i;
+  }));
+  const med={};
+  Object.keys(cart).forEach(id=>{
+    const desde=visto[id], quantos=Math.max(1,fech.length-desde);
+    let soma=0;for(let i=desde;i<fech.length;i++)soma+=cart[id][i]||0;
+    med[id]=r2(soma/quantos);
+  });
+  return {ms:fech.length, cart:med, tudo:r2(fech.length?tudo/fech.length:0)};
+}
+function orcCartao(c,M){
+  if(+c.orc>0)return r2(+c.orc);
+  const disp=r2((+cfg.salario||0)-(+cfg.metaInvest||0));
+  if(!(disp>0))return 0;
+  M=M||mediaCartao(6);
+  const meu=M.cart[c.id]||0;
+  // sem histórico do cartão, reparte por igual entre os cartões: é o único
+  // palpite honesto antes de haver costume
+  const v=(M.tudo>0&&meu>0)?disp*(meu/M.tudo):disp/Math.max(1,cfg.cartoes.length);
+  return Math.max(10,Math.round(Math.min(v,c.limite||v)/10)*10);
+}
+// compras feitas no cartão dentro do mês, que é o que o orçamento mede —
+// a fatura é outra coisa: ela junta parcelas de compras antigas
+function compradoNoMes(id,M){
+  return r2((meses[M]||[]).reduce((a,t)=>a+(t.t==='d'&&t.pg===id?(+t.v||0):0),0));
+}
 function ritmo(M){
   const o=orcTotal(),g=resumo(M).desp,hj=hoje(),dm=diasNo(M);
   const d=M<mk(hj)?dm:M>mk(hj)?0:+hj.slice(8,10);
@@ -657,12 +701,19 @@ cartoes(){
   const pag=pagtosNoCartao();
   if(pag.length)h+=`<div class="note" style="border-left-color:var(--bad)"><b>${pag.length} pagamento${pag.length===1?'':'s'} de fatura lançado${pag.length===1?'':'s'} como compra</b>Somam ${brl(r2(pag.reduce((a,t)=>a+(+t.v||0),0)))} e estão inflando as faturas. <a onclick="formPagtos()">Ver e apagar</a></div>`;
   if(!cfg.cartoes.length)return `<div class="grp"><div class="blank">Nenhum cartão de crédito cadastrado.<div style="margin-top:16px"><button class="btn s" onclick="formCartao()">Adicionar cartão</button></div></div></div>`;
+  const MC=mediaCartao(6);
   cfg.cartoes.forEach(c=>{
     const f=faturas(c),A=fatAberta(c),u=usado(c),livre=c.limite-u;
+    const alvo=orcCartao(c,MC), jaMes=compradoNoMes(c.id,st.mes);
     h+=`<div class="panel" style="--edge:${c.cor};padding-bottom:4px">
     <div style="display:flex;align-items:baseline"><b style="font-size:17px;font-weight:600">${esc(c.nome)}</b><span style="flex:1"></span><span class="lbl">limite ${brl(c.limite)}</span></div>
     ${barra(u,c.limite)}
     <div class="lbl" style="margin-top:8px;display:flex"><span>${brl(u)} comprometidos</span><span style="flex:1"></span><span class="${livre<0?'down':''}">${livre<0?brl(-livre)+' além do limite':brl(livre)+' livres'}</span></div>
+    ${alvo>0?`<div class="lbl" style="margin-top:12px;display:flex"><span>comprou ${brl(jaMes)} em ${curtoMes(st.mes)}</span><span style="flex:1"></span><span class="${jaMes>alvo?'down':'up'}">ideal até ${brl(alvo)}</span></div>
+    ${barra(jaMes,alvo)}
+    <p class="hint" style="padding-left:0">${c.orc>0?'Teto que você definiu.'
+      :`Sugestão do app: a fatia deste cartão no que sobra do salário depois de investir${MC.cart[c.id]?', pelo seu costume dos últimos meses':', repartido entre os cartões por falta de histórico'}.`}
+      <a onclick="formCartao('${c.id}')">mudar</a></p>`:''}
     <p class="hint" style="padding-left:0">Fecha todo dia ${c.fecha}, vence dia ${c.vence}. O pagamento sai de ${esc((conta(c.conta)||{}).nome||'—')}.</p>
     <div class="acts" style="margin-top:0"><button class="btn g s" onclick="formAcertaFatura('${c.id}')">Acertar fatura aberta</button>
     <button class="btn g s" onclick="document.getElementById('ext').click()">Importar extrato do cartão</button></div>
@@ -1712,10 +1763,28 @@ const APK_LINK='https://github.com/joaovictorsantg-sudo/minhas-financas/releases
 const apkVelho=()=>{try{return noAparelho()&&typeof Aparelho.versaoApp==='function'&&Aparelho.versaoApp()!==APK}catch(e){return false}};
 const noAparelho=()=>{try{return typeof Aparelho!=='undefined'&&!!Aparelho&&typeof Aparelho.pendentes==='function'}catch(e){return false}};
 const podeOuvir=()=>{try{return noAparelho()&&Aparelho.temPermissao()}catch(e){return false}};
+/**
+ * Propaganda com preço dentro não é compra.
+ *
+ * O banco avisa a compra e também anuncia a loja, e os dois trazem "R$". O
+ * que separa um do outro não é o valor, é o modo: a compra é registro do que
+ * aconteceu, o anúncio é convite para o que pode acontecer — e convite se
+ * escreve no imperativo, com desconto, cupom e "a partir de".
+ */
+const PROPAGANDA=/\b(aproveite|desconto|descontos|cupom|cupons|oferta|ofertas|promo|promocao|promocoes|economize|ganhe|garanta|assine|renove|antecipe|resgate|convide|indique|sorteio|voucher|clube|cashback de ate|parcele sua|renegocie|emprestimo|credito pre|limite liberado|black friday|frete gratis|compre|peca ja|confira|imperdivel|so hoje|ultimas horas)\b|\bat[ée] r\$|\ba partir de r\$|\bpor apenas\b|\d+%\s*(off|de desconto)/;
+const ehPropaganda=n=>PROPAGANDA.test(semAcento((n.titulo||'')+' '+(n.texto||'')));
 function notifs(){
   if(!noAparelho())return [];
   try{
-    const ns=(JSON.parse(Aparelho.pendentes()||'[]')||[]).filter(n=>+n.valor>0);
+    const tudo=(JSON.parse(Aparelho.pendentes()||'[]')||[]).filter(n=>+n.valor>0);
+    const lixo=tudo.filter(ehPropaganda);
+    if(lixo.length){
+      // fica o último, para dar para conferir se algo de verdade foi recusado
+      cfg.ultPromo=(lixo[lixo.length-1].titulo||'')+' — '+(lixo[lixo.length-1].texto||'');
+      cfg.promoFora=(+cfg.promoFora||0)+lixo.length;cache();
+      try{ Aparelho.descartar(JSON.stringify(lixo.map(n=>n.id))) }catch(e){}
+    }
+    const ns=tudo.filter(n=>!ehPropaganda(n));
     // o comprovante some da caixa assim que é lançado, e quando ele é lido
     // errado o texto é a única pista de onde a leitura se perdeu
     const c=ns.filter(n=>/comprovante/i.test(n.banco||'')).pop();
@@ -2296,6 +2365,8 @@ function formCartao(id){
   ${id&&cfg.bancos.length?(c.doBanco===false
     ?`<div class="note" style="border-left-color:var(--up)"><b>Limite e datas são seus</b>A sincronização não mexe mais neles neste cartão. <a onclick="voltaAoBanco('${id}')">Deixar o banco atualizar de novo</a></div>`
     :`<p class="hint" style="padding-left:0">Hoje a sincronização atualiza limite e datas com o que o banco informa. Se você corrigir algo aqui, ela para de mexer.</p>`):''}
+  ${id?`<label>Ideal comprar por mês</label><input id="cc_orc" inputmode="decimal" value="${c.orc?n2(c.orc):''}" placeholder="${(()=>{const v=orcCartao(Object.assign({},c,{orc:0}));return v?n2(v):'0,00'})()}">
+  <p class="hint" style="padding-left:0">Vazio, o app sugere sozinho: a fatia deste cartão no que sobra do salário depois da meta de investir.</p>`:''}
   ${id?`<label>Fatura aberta</label><select id="cc_ab2">
     <option value="" ${c.abertaBanco!==true?'selected':''}>Somar o que foi lançado no app</option>
     <option value="1" ${c.abertaBanco===true?'selected':''}>Usar o parcial que o banco mostra</option>
@@ -2317,6 +2388,12 @@ async function forcaAtualizar(){
   }catch(e){}
   location.replace(location.pathname+'?v='+Date.now());
 }
+function verPromo(){
+  abrir(cab('Último aviso ignorado')+
+   `<pre style="white-space:pre-wrap;font:12px/1.5 ui-monospace,monospace;background:var(--card2);padding:12px;border-radius:10px">${esc(cfg.ultPromo||'')}</pre>
+    <p class="hint" style="padding-left:0">Se isto era uma compra de verdade, me diga: o filtro erra para menos quando a loja escreve como banco.</p>
+    <div class="acts fim"><button class="btn" onclick="fechar()">Fechar</button></div>`);
+}
 function verComp(){
   abrir(cab('Último comprovante lido')+
    `<pre style="white-space:pre-wrap;font:12px/1.5 ui-monospace,monospace;background:var(--card2);padding:12px;border-radius:10px;overflow-x:auto">${esc(cfg.ultComp||'')}</pre>
@@ -2333,6 +2410,8 @@ function salvarCartao(id){
     // a partir daí a sincronização para de sobrescrever esses campos
     const mudou=(+c.fecha!==f)||(+c.vence!==v)||(r2(+c.limite||0)!==r2(lim));
     Object.assign(c,{nome,limite:r2(lim),fecha:f,vence:v,conta:val('cc_ct'),cor:val('cc_cor')});
+    const orc=num(val('cc_orc'));
+    if(orc>0)c.orc=r2(orc); else delete c.orc;
     if(val('cc_ab2')==='1')c.abertaBanco=true; else delete c.abertaBanco;
     // o ajuste antigo da aberta vira mentira quando a origem dela muda
     if(c.aberturas)delete c.aberturas[fatAberta(c)];
@@ -2872,6 +2951,9 @@ function formAjustes(){
     <div class="imid"><div class="t1">Lançar sem revisar</div>
     <div class="t2">Entra direto quando o app abre, mas só quando o aviso diz de qual conta ou cartão saiu — ou quando você já escolheu o destino daquele banco uma vez. O que ficar em dúvida continua esperando.</div></div></div>`:''}`:''}
 
+  ${cfg.promoFora>0?`<div class="ilin" style="border-bottom:0" onclick="verPromo()">
+    <div class="imid"><div class="t1">${cfg.promoFora} aviso${cfg.promoFora===1?'':'s'} de propaganda ignorado${cfg.promoFora===1?'':'s'}</div>
+    <div class="t2">Anúncio com preço dentro não é compra. Veja o último, caso algo de verdade tenha sido recusado.</div></div><div class="iarr">›</div></div>`:''}
   ${cfg.ultComp?`<div class="ilin" style="border-bottom:0" onclick="verComp()">
     <div class="imid"><div class="t1">Ver o último comprovante lido</div>
     <div class="t2">O texto que o app enxergou na figura. Serve para entender uma leitura que saiu errada.</div></div><div class="iarr">›</div></div>`:''}

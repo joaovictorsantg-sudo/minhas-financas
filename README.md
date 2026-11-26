@@ -360,3 +360,15 @@ Editar um lançamento é o mesmo formulário de criar, preenchido, e o
 identificador da transação acompanha: reenviar o comprovante depois
 ainda encontra aquele lançamento em vez de criar outro. Aporte fica de
 fora, porque ele mexeu na posição e no preço médio quando foi lançado.
+
+Cartão não cria dinheiro, só adia a saída dele: o teto de todos os
+cartões somados é o que sobra do salário depois da meta de investir, e
+cada cartão fica com a fatia que de fato usa — nunca acima do limite,
+que é um teto que o banco já impôs. O que se mede é a compra feita no
+mês, não a fatura, que junta parcelas de compras antigas.
+
+Propaganda com preço dentro não é compra. O que separa uma da outra não é
+o valor, é o modo: a compra é registro do que aconteceu, o anúncio é
+convite para o que pode acontecer, e convite se escreve no imperativo,
+com desconto, cupom e "a partir de". O último recusado fica à vista, para
+dar para conferir quando a loja escreve como banco.
