@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v100 — 26/11';
+const VERSAO='v101 — 26/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1892,9 +1892,13 @@ function leNotif(n){
     const m=t.match(marca);return m?t.slice(m.index+m[0].length):'';
   })();
   const noLado=lista=>lado?quaisEm(lado).find(x=>lista.some(y=>y.id===x.id))||null:null;
+  // "cartão final 9442" é como o banco nomeia o cartão, e é a identificação
+  // mais exata que um aviso traz: nenhum nome compete com quatro dígitos
+  const fim4=finalCartao(n);
+  const porFim=lista=>fim4?lista.find(x=>String(x.fim||'')===fim4)||null:null;
   // achar pelo nome é uma coisa; cair na primeira conta da lista é outra, e
   // só a primeira dá para lançar sem perguntar
-  const firme=lista=>noLado(lista)
+  const firme=lista=>porFim(lista)||noLado(lista)
     ||lista.find(x=>!generico(x)&&semAcento(x.nome).length>=3&&t.includes(semAcento(x.nome)))
     ||lista.find(x=>semAcento(x.nome).includes(semAcento(n.banco||'')))
     ||lista.find(x=>semAcento(n.banco||'').includes(semAcento(x.nome))&&!generico(x));
@@ -1911,7 +1915,11 @@ function leNotif(n){
   // de um costume. Quando os dois discordam, quem viu a compra tem razão
   const noTexto=busca(firme);
   const alvo=dono?dono.x:noTexto?noTexto:valido?{id:guardado}:busca(porNome);
-  const certo=!ambiguo&&!semLados&&(!!dono||!!noTexto||!!valido);
+  // o aviso disse o final e nenhum cartão o reivindica: o banco que avisou
+  // estreita a escolha, mas não a decide. Perguntar uma vez ensina o final
+  // ao cartão, e as próximas vezes já não perguntam
+  const fimOrfao=credito&&!!fim4&&!porFim(cfg.cartoes)&&!valido;
+  const certo=!ambiguo&&!semLados&&!fimOrfao&&(!!dono||!!noTexto||!!valido);
   const desc=(comprov&&nomeNaSecao(entrada?pc.P:pc.R))||nomeNaNotif(n,entrada);
   // "Henrique Souza da Costa" no extrato parece um gasto com alguém; o que
   // aconteceu foi um Pix dele para você, e a direção importa mais que o nome
@@ -2115,6 +2123,12 @@ function mexeNotif(i,k,v){
   n[k]=(k==='usar'?!!v:v);
   // corrigiu o destino: da próxima vez esse banco já vem assim
   if(k==='pg'&&v){
+    // o aviso disse o final e agora se sabe de quem ele é: guardar isso no
+    // cartão vale mais que o costume, porque não depende do app que avisou
+    const fim=finalCartao(n), cc=cartao(v);
+    if(fim&&cc&&!cc.fim&&!cfg.cartoes.some(x=>String(x.fim||'')===fim)){
+      cc.fim=fim;salvarCfg();
+    }
     cfg.destNotif=cfg.destNotif||{};
     cfg.destNotif[chaveNotif(n,n.t==='r',!!cartao(v))]=v;
     salvarCfg();
@@ -2375,6 +2389,8 @@ function formCartao(id){
   ${id&&cfg.bancos.length?(c.doBanco===false
     ?`<div class="note" style="border-left-color:var(--up)"><b>Limite e datas são seus</b>A sincronização não mexe mais neles neste cartão. <a onclick="voltaAoBanco('${id}')">Deixar o banco atualizar de novo</a></div>`
     :`<p class="hint" style="padding-left:0">Hoje a sincronização atualiza limite e datas com o que o banco informa. Se você corrigir algo aqui, ela para de mexer.</p>`):''}
+  <label>Quatro últimos dígitos</label><input id="cc_fim" inputmode="numeric" maxlength="4" value="${esc(c.fim||'')}" placeholder="9442">
+  <p class="hint" style="padding-left:0">O banco avisa a compra dizendo "cartão final ····". Com isso aqui, o app sabe de qual cartão o aviso fala.</p>
   ${id?`<label>Ideal comprar por mês</label><input id="cc_orc" inputmode="decimal" value="${c.orc?n2(c.orc):''}" placeholder="${(()=>{const v=orcCartao(Object.assign({},c,{orc:0}));return v?n2(v):'0,00'})()}">
   <p class="hint" style="padding-left:0">Vazio, o app sugere sozinho: a fatia deste cartão no que sobra do salário depois da meta de investir.</p>`:''}
   ${id?`<label>Fatura aberta</label><select id="cc_ab2">
@@ -2422,6 +2438,8 @@ function salvarCartao(id){
     Object.assign(c,{nome,limite:r2(lim),fecha:f,vence:v,conta:val('cc_ct'),cor:val('cc_cor')});
     const orc=num(val('cc_orc'));
     if(orc>0)c.orc=r2(orc); else delete c.orc;
+    const fim=(val('cc_fim')||'').replace(/\D/g,'').slice(-4);
+    if(fim.length===4)c.fim=fim; else delete c.fim;
     if(val('cc_ab2')==='1')c.abertaBanco=true; else delete c.abertaBanco;
     // o ajuste antigo da aberta vira mentira quando a origem dela muda
     if(c.aberturas)delete c.aberturas[fatAberta(c)];
@@ -2429,6 +2447,8 @@ function salvarCartao(id){
   }
   else{
     const c={id:'c_'+uid(),nome,limite:r2(lim),fecha:f,vence:v,conta:val('cc_ct'),cor:val('cc_cor'),aberturas:{}};
+    const fimN=(val('cc_fim')||'').replace(/\D/g,'').slice(-4);
+    if(fimN.length===4)c.fim=fimN;
     const ab=num(val('cc_ab'));
     if(ab>0){const h=hoje();c.aberturas[+h.slice(8,10)>=f?addM(mk(h),1):mk(h)]=r2(ab)}
     cfg.cartoes.push(c);

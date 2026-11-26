@@ -179,6 +179,11 @@ pelo nome da conta no texto, ou pela instituição do lado dele no
 comprovante. Cair na primeira conta da lista por falta de pista não é
 saber, e esse continua esperando revisão.
 
+O banco nomeia o cartão pelo final — "cartão final 9442" —, e nenhum nome
+compete com quatro dígitos. Cada cartão guarda o seu, e quando o aviso traz
+um final que nenhum cartão reivindica o app pergunta uma vez: a resposta
+ensina o final àquele cartão, e as próximas não perguntam.
+
 A carteira do celular avisa por todos os cartões com o mesmo nome de app,
 e o que distingue um do outro é o final impresso no aviso — sem isso, um
 destino escolhido uma vez levava junto as compras do outro cartão. E
