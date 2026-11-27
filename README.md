@@ -389,3 +389,8 @@ amortizar é pagar parte para o limite voltar na mesma medida. Sai da
 conta o que foi pago, pagamento a pagamento, e cada um pode ter saído de
 uma conta diferente. O que sobra entra no rotativo, cujos juros aparecem
 na próxima fatura que o banco mandar — o app não os inventa.
+
+Uma conta não é só um nome: dela penduram lançamentos, os cartões que
+pagam por ela, o mapeamento do banco e os pagamentos de fatura. Excluir
+é por isso sempre mudar de dono primeiro — o saldo inicial vai junto,
+senão o total do app muda ao excluir.

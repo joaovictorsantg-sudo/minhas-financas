@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v102 — 27/11';
+const VERSAO='v103 — 27/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -2504,6 +2504,82 @@ function salvarCartao(id){
   }
   salvarCfg();fechar();toast(id?'Cartão salvo':'Cartão adicionado');
 }
+/**
+ * Uma conta não é só um nome: dela penduram lançamentos, cartões que pagam
+ * por ela, o mapeamento do banco e os pagamentos de fatura. Apagar sem
+ * cuidado deixa tudo isso apontando para o nada, e o que some não é a
+ * conta, é o histórico. Por isso excluir é sempre mudar de dono primeiro.
+ */
+function usosDaConta(id){
+  return {
+    lancs: todos().filter(t=>t.pg===id).length,
+    cartoes: cfg.cartoes.filter(c=>c.conta===id).length,
+    bancos: (cfg.bancos||[]).filter(b=>Object.values(b.mapa||{}).includes(id)).length,
+  };
+}
+function formConta(){
+  abrir(cab('Nova conta')+
+  `<div class="two"><div><label>Ícone</label><input id="cn_e" value="🏦" maxlength="4" style="text-align:center"></div>
+  <div><label>Nome</label><input id="cn_n" placeholder="Nubank" autocomplete="off"></div></div>
+  <label>Saldo de hoje</label><input id="cn_s" inputmode="decimal" value="0,00">
+  <div class="acts fim"><button class="btn g" onclick="fechar()">Cancelar</button>
+  <button class="btn" onclick="salvaContaNova()">Criar</button></div>`);
+}
+function salvaContaNova(){
+  const nome=(val('cn_n')||'').trim();
+  if(!nome)return toast('Dê um nome à conta');
+  cfg.contas.push({id:'ct_'+uid(),emoji:val('cn_e')||'🏦',nome,saldo:r2(num(val('cn_s'))||0)});
+  salvarCfg();fechar();render();toast('Conta criada');
+}
+function editarConta(id){
+  const c=conta(id)||(rasc&&rasc.contas.find(x=>x.id===id)); if(!c)return;
+  cj={id,nome:c.nome,emoji:c.emoji||'🏦',para:(cfg.contas.find(x=>x.id!==id)||{}).id||''};
+  formConta2();
+}
+let cj=null;
+function formConta2(){
+  const u=usosDaConta(cj.id), presas=u.lancs+u.cartoes+u.bancos, outras=cfg.contas.filter(x=>x.id!==cj.id);
+  abrir(cab('Conta')+
+  `<div class="two"><div><label>Ícone</label><input id="cj_e" value="${esc(cj.emoji)}" maxlength="4" style="text-align:center"></div>
+  <div><label>Nome</label><input id="cj_n" value="${esc(cj.nome)}"></div></div>
+  <div class="acts fim"><button class="btn" onclick="salvaConta2()">Salvar</button></div>
+  <h4>Excluir</h4>
+  ${!outras.length?`<p class="hint" style="padding-left:0">Esta é a única conta. O app precisa de uma para guardar o que entra e sai.</p>`
+   :`${presas?`<p class="hint" style="padding-left:0">Tem ${[u.lancs&&u.lancs+' lançamento'+(u.lancs>1?'s':''),u.cartoes&&u.cartoes+' cartão'+(u.cartoes>1?'ões':''),u.bancos&&u.bancos+' banco conectado'].filter(Boolean).join(', ')} nesta conta. Nada disso se perde: passa para a conta que você escolher, com o saldo junto.</p>`
+    :`<p class="hint" style="padding-left:0">Nada está preso a esta conta.</p>`}
+   <label>Passar tudo para</label><select id="cj_p">${outras.map(x=>`<option value="${x.id}" ${x.id===cj.para?'selected':''}>${x.emoji} ${esc(x.nome)}</option>`).join('')}</select>
+   <div class="acts fim"><button class="btn d" onclick="delConta()">Excluir a conta</button></div>`}`);
+}
+function salvaConta2(){
+  const c=conta(cj.id); if(!c)return;
+  c.nome=(val('cj_n')||'').trim()||c.nome; c.emoji=val('cj_e')||'🏦';
+  // os ajustes abertos têm uma cópia: sem isto o nome volta ao salvar
+  if(rasc&&rasc.contas){const r=rasc.contas.find(x=>x.id===cj.id);if(r){r.nome=c.nome;r.emoji=c.emoji}}
+  salvarCfg();fechar();render();toast('Conta alterada');
+}
+function delConta(){
+  const id=cj.id, para=val('cj_p')||cj.para, dest=conta(para);
+  if(!dest)return toast('Escolha para onde vai');
+  const velha=conta(id); if(!velha)return;
+  // o ponto de partida vai junto, senão o total do app muda ao excluir
+  dest.saldo=r2((+dest.saldo||0)+(+velha.saldo||0));
+  Object.keys(meses).forEach(k=>(meses[k]||[]).forEach(t=>{if(t.pg===id)t.pg=para}));
+  cfg.cartoes.forEach(c=>{if(c.conta===id)c.conta=para});
+  (cfg.bancos||[]).forEach(b=>Object.keys(b.mapa||{}).forEach(k=>{if(b.mapa[k]===id)b.mapa[k]=para}));
+  Object.keys(cfg.destNotif||{}).forEach(k=>{if(cfg.destNotif[k]===id)cfg.destNotif[k]=para});
+  Object.keys(cfg.faturasPagas||{}).forEach(k=>{
+    const v=cfg.faturasPagas[k];
+    if(typeof v==='string'){if(v===id)cfg.faturasPagas[k]=para}
+    else if(Array.isArray(v))v.forEach(p=>{if(p.c===id)p.c=para});
+    else if(v&&v.c===id)v.c=para;
+  });
+  cfg.contas=cfg.contas.filter(x=>x.id!==id);
+  if(rasc&&rasc.contas){rasc.contas=rasc.contas.filter(x=>x.id!==id);
+    const r=rasc.contas.find(x=>x.id===para); if(r)r.saldo=dest.saldo;
+    if(rasc._visto)delete rasc._visto[id];}
+  cj=null;salvarCfg();Object.keys(meses).forEach(salvarMes);fechar();render();
+  toast('Conta excluída, tudo passou para '+dest.nome);
+}
 function delCartao(id){
   const usa=todos().some(tx=>tx.pg===id);
   if(usa)return toast('Esse cartão tem lançamentos. Apague-os antes.');
@@ -3001,7 +3077,8 @@ function formAjustes(){
   <p class="hint" style="padding-left:0">Em ${nomeMes(st.mes)} isso cai em ${dataBR(dataSalario(st.mes))}.</p>
   <h4>Saldo de hoje</h4><p class="hint" style="padding-left:0">Quanto tem em cada conta agora. Se não bater, corrija aqui que o app acerta o histórico sozinho.</p>`;
   rasc.contas.forEach((c,i)=>{const v=rasc._visto&&rasc._visto[c.id]!==undefined?rasc._visto[c.id]:c.saldo;
-    h+=`<label>${c.emoji} ${esc(c.nome)}</label><input id="t_s${i}" inputmode="decimal" value="${n2(v)}">`});
+    h+=`<label>${c.emoji} ${esc(c.nome)}<a style="float:right;font-weight:400" onclick="editarConta('${c.id}')">editar ou excluir</a></label><input id="t_s${i}" inputmode="decimal" value="${n2(v)}">`});
+  h+=`<div class="acts"><button class="btn g s" onclick="fechar();formConta()">Adicionar conta</button></div>`;
   h+=`<h4>Cartões</h4>`;
   rasc.cartoes.forEach((c,i)=>{h+=`<div class="panel" style="--edge:${c.cor};margin-top:10px"><b style="font-weight:600">${esc(c.nome)}</b>
     <div class="three"><div><label>Limite</label><input id="c_l${i}" inputmode="decimal" value="${n2(c.limite)}"></div>
