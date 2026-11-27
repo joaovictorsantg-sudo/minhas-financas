@@ -383,3 +383,9 @@ o valor, é o modo: a compra é registro do que aconteceu, o anúncio é
 convite para o que pode acontecer, e convite se escreve no imperativo,
 com desconto, cupom e "a partir de". O último recusado fica à vista, para
 dar para conferir quando a loja escreve como banco.
+
+Uma fatura recebe mais de um pagamento, e nenhum precisa cobrir o total:
+amortizar é pagar parte para o limite voltar na mesma medida. Sai da
+conta o que foi pago, pagamento a pagamento, e cada um pode ter saído de
+uma conta diferente. O que sobra entra no rotativo, cujos juros aparecem
+na próxima fatura que o banco mandar — o app não os inventa.

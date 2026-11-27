@@ -213,7 +213,7 @@ svg.chart text{fill:var(--mute);font-size:10px;font-family:Archivo,sans-serif}
 <div class="ov" id="ov" onclick="if(event.target===this)fechar()"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast"></div>
 <script>
-const VERSAO='v101 — 26/11';
+const VERSAO='v102 — 27/11';
 const $=s=>document.querySelector(s);
 const brl=v=>(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const n2=v=>Math.abs(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -474,14 +474,32 @@ const mesVenc=(c,F)=>venceDia(c,F)>fechaDia(c,F)?F:addM(F,1);
 const fechaData=(c,F)=>p2(fechaDia(c,F))+'/'+F.slice(5,7);
 const venceData=(c,F)=>p2(venceDia(c,F))+'/'+mesVenc(c,F).slice(5,7);
 const pagaKey=(c,F)=>c.id+':'+F;
-const paga=(c,F)=>!!cfg.faturasPagas[pagaKey(c,F)];
-function pagaPor(c,F){
+/**
+ * Uma fatura pode receber mais de um pagamento, e nenhum deles precisa
+ * cobrir o total: amortizar é pagar parte para o limite voltar na mesma
+ * medida. O que estava gravado antes não tinha valor porque só existia
+ * pagamento inteiro — e inteiro é o que ele continua significando.
+ */
+const pgsFat=(c,F)=>{
   const v=cfg.faturasPagas[pagaKey(c,F)];
-  if(v&&typeof v==='object'&&conta(v.c))return v.c;
-  if(typeof v==='string'&&conta(v))return v;
-  return c.conta;
+  if(!v)return [];
+  if(Array.isArray(v))return v;
+  if(typeof v==='string')return [{c:v,d:'',v:null}];
+  return [v];
+};
+function pagoDe(c,F){
+  const ps=pgsFat(c,F); if(!ps.length)return 0;
+  if(ps.some(p=>p.v==null))return r2(faturas(c)[F]||0);
+  return r2(ps.reduce((s,p)=>s+(+p.v||0),0));
 }
-const pagaEm=(c,F)=>{const v=cfg.faturasPagas[pagaKey(c,F)];return (v&&typeof v==='object'&&v.d)||''};
+const paga=(c,F)=>{const ps=pgsFat(c,F);if(!ps.length)return false;
+  return pagoDe(c,F)>=r2(faturas(c)[F]||0)-0.005};
+const temPg=(c,F)=>pgsFat(c,F).length>0;
+function pagaPor(c,F){
+  const ps=pgsFat(c,F), u=ps[ps.length-1];
+  return (u&&conta(u.c))?u.c:c.conta;
+}
+const pagaEm=(c,F)=>{const ps=pgsFat(c,F),u=ps[ps.length-1];return (u&&u.d)||''};
 const vencISO=(c,F)=>{const mv=mesVenc(c,F);return mv+'-'+p2(Math.min(c.vence,diasNo(mv)))};
 // semAjuste: só o que foi comprado, sem o saldo anterior. É contra isso que se
 // mede a diferença até o total que o banco informa.
@@ -491,12 +509,22 @@ function faturas(c,semAjuste){
   todos().forEach(tx=>{if(tx.pg!==c.id||tx.t!=='d')return;partes(tx).forEach(p=>m[p.fat]=r2((m[p.fat]||0)+p.v))});
   return m;
 }
-function usado(c){const f=faturas(c);let u=0;for(const F in f)if(!paga(c,F))u+=f[F];return r2(u)}
+// o limite volta na medida do que foi pago, não do que foi quitado
+function usado(c){const f=faturas(c);let u=0;
+  for(const F in f)u+=f[F]>0?Math.max(0,r2(f[F]-pagoDe(c,F))):f[F];
+  return r2(u)}
 const totalCartoes=()=>r2(cfg.cartoes.reduce((s,c)=>s+usado(c),0));
 function saldoConta(id){
   let s=+((conta(id)||{}).saldo)||0;
   todos().forEach(tx=>{if(tx.pg===id)s+=tx.t==='r'?tx.v:-tx.v});
-  cfg.cartoes.forEach(c=>{const f=faturas(c);for(const F in f)if(paga(c,F)&&pagaPor(c,F)===id)s-=f[F]});
+  // sai da conta o que foi pago, parcela a parcela: uma fatura amortizada
+  // tirou menos do que vale, e cada pagamento pode ter saído de outra conta
+  cfg.cartoes.forEach(c=>{const f=faturas(c);
+    for(const F in f){
+      const ps=pgsFat(c,F); if(!ps.length)continue;
+      if(ps.some(p=>p.v==null)){ if(pagaPor(c,F)===id)s-=f[F]; continue }
+      ps.forEach(p=>{if((conta(p.c)?p.c:c.conta)===id)s-=(+p.v||0)});
+    }});
   return r2(s);
 }
 const totalContas=()=>r2(cfg.contas.reduce((s,c)=>s+saldoConta(c.id),0));
@@ -720,10 +748,12 @@ cartoes(){
     <div class="rows" style="margin:0 -16px">`;
     const lista=Object.keys(f).filter(F=>Math.abs(f[F])>.004).sort().filter(F=>!(paga(c,F)&&difM(F,A)>2));
     if(!lista.length)h+=`<div style="display:block;padding:0"><div class="blank">Nenhuma compra lançada neste cartão.</div></div>`;
-    lista.forEach(F=>{const pg=paga(c,F);
-      const tg=pg?'<span class="tag ok">paga</span>':F<A?'<span class="tag hot">fechada</span>':F===A?'<span class="tag warn">aberta</span>':'<span class="tag">futura</span>';
-      h+=`<div class="row" style="cursor:default"><span class="mid"><span class="t1">Fatura de ${curtoMes(mesVenc(c,F))} ${tg}</span><span class="t2">fecha ${fechaData(c,F)}, vence ${venceData(c,F)}${paga(c,F)&&pagaEm(c,F)?' · paga em '+dataBR(pagaEm(c,F)):''}</span></span>
-      <span class="end vmid">${money(f[F])}</span>${F<=A||pg?`<button class="btn ${pg?'g':''} s" onclick="pagarFatura('${c.id}','${F}')">${pg?'Desfazer':'Paguei'}</button>`
+    lista.forEach(F=>{const pg=paga(c,F), jaP=pagoDe(c,F), parcial=!pg&&jaP>0.004;
+      const tg=pg?'<span class="tag ok">paga</span>':parcial?'<span class="tag warn">amortizada</span>'
+        :F<A?'<span class="tag hot">fechada</span>':F===A?'<span class="tag warn">aberta</span>':'<span class="tag">futura</span>';
+      h+=`<div class="row" style="cursor:default"><span class="mid"><span class="t1">Fatura de ${curtoMes(mesVenc(c,F))} ${tg}</span><span class="t2">fecha ${fechaData(c,F)}, vence ${venceData(c,F)}${
+        pg&&pagaEm(c,F)?' · paga em '+dataBR(pagaEm(c,F)):parcial?' · pagos '+brl(jaP)+', faltam '+brl(r2(f[F]-jaP)):''}</span></span>
+      <span class="end vmid">${money(f[F])}</span>${F<=A||temPg(c,F)?`<button class="btn ${pg?'g':''} s" onclick="${pg?`desfazPg('${c.id}','${F}')`:`pagarFatura('${c.id}','${F}')`}">${pg?'Desfazer':parcial?'Pagar resto':'Paguei'}</button>`
        :''}<button class="btn g s" onclick="formDatasFat('${c.id}','${F}')" aria-label="Datas desta fatura">datas</button></div>`});
     // a fatura removida sai da lista: sem uma linha própria não há como voltar
     (c.pula||[]).slice().sort().forEach(F=>{
@@ -1062,19 +1092,33 @@ function excluir(k,id){
   salvarMes(k);fechar();toast('Excluído');
 }
 function pagarFatura(cid,F){
-  const c=cartao(cid),k=pagaKey(c,F);
-  if(cfg.faturasPagas[k]){delete cfg.faturasPagas[k];salvarCfg();return toast('Desfeito')}
-  const v=r2(faturas(c)[F]||0), venc=vencISO(c,F), passado=venc<hoje();
-  pg={cid,F,v,data:venc,conta:c.conta,manter:passado};
+  const c=cartao(cid), venc=vencISO(c,F), passado=venc<hoje();
+  const falta=r2(r2(faturas(c)[F]||0)-pagoDe(c,F));
+  pg={cid,F,v:falta,data:passado?venc:hoje(),conta:c.conta,manter:passado};
   formPagar();
 }
+function desfazPg(cid,F){
+  const c=cartao(cid), k=pagaKey(c,F), ps=pgsFat(c,F);
+  if(!ps.length)return;
+  ps.pop();
+  if(ps.length)cfg.faturasPagas[k]=ps; else delete cfg.faturasPagas[k];
+  salvarCfg();fechar();render();toast('Pagamento desfeito');
+}
 let pg=null;
-function lePagar(){['conta','data'].forEach(x=>{const e=$('#pf_'+x);if(e)pg[x]=e.value})}
+function lePagar(){
+  ['conta','data'].forEach(x=>{const e=$('#pf_'+x);if(e)pg[x]=e.value});
+  const ev=$('#pf_v'); if(ev)pg.v=r2(num(ev.value));
+}
 function formPagar(){
   const c=cartao(pg.cid), antes=saldoConta(pg.conta), depois=r2(antes-(pg.manter?0:pg.v));
+  const total=r2(faturas(c)[pg.F]||0), jaPago=pagoDe(c,pg.F), falta=r2(total-jaPago-pg.v);
   abrir(cab('Pagar a fatura de '+curtoMes(mesVenc(c,pg.F)))+
-  `<span class="vbig">${money(pg.v)}</span>
-  <p class="hint" style="padding-left:0;margin-top:6px">${esc(c.nome)}, vence ${venceData(c,pg.F)}.</p>
+  `<label>Quanto vai pagar</label><input id="pf_v" inputmode="decimal" value="${n2(pg.v)}" onchange="lePagar();formPagar()">
+  <div class="acts" style="margin-top:8px">${[['Tudo',r2(total-jaPago)],['Metade',r2((total-jaPago)/2)],['Mínimo (15%)',r2(total*0.15)]]
+    .filter(([,v])=>v>0.004&&v<=r2(total-jaPago)+0.004)
+    .map(([r,v])=>`<button class="btn g s" onclick="pg.v=${v};formPagar()">${r}</button>`).join('')}</div>
+  <p class="hint" style="padding-left:0;margin-top:6px">${esc(c.nome)}, vence ${venceData(c,pg.F)}. Fatura de ${brl(total)}${jaPago>0.004?', já pagos '+brl(jaPago):''}.</p>
+  ${falta>0.004?`<div class="note" style="border-left-color:var(--bad)"><b>Sobram ${brl(falta)} em aberto</b>O limite volta só na medida do que for pago, e o resto entra no rotativo — os juros aparecem na próxima fatura que o banco mandar, não aqui.</div>`:''}
   <div class="two"><div><label>Saiu de</label><select id="pf_conta" onchange="lePagar();formPagar()">${cfg.contas.map(x=>`<option value="${x.id}" ${x.id===pg.conta?'selected':''}>${x.emoji} ${esc(x.nome)}</option>`).join('')}</select></div>
   <div><label>Em que dia</label><input id="pf_data" type="date" value="${esc(pg.data)}" onchange="lePagar();formPagar()"></div></div>
   <div class="ilin" style="border-bottom:0;margin-top:14px" onclick="lePagar();pg.manter=!pg.manter;formPagar()">
@@ -1082,16 +1126,21 @@ function formPagar(){
     <div class="imid"><div class="t1">Esse pagamento já está no saldo da conta</div>
     <div class="t2">Marque se o banco já descontou e você digitou o saldo depois disso. É o caso de fatura antiga.</div></div></div>
   <p class="hint" style="padding-left:0">${esc((conta(pg.conta)||{}).nome||'')} ${pg.manter?'continua em '+brl(antes):'vai de '+brl(antes)+' para '+brl(depois)}.</p>
-  <div class="acts fim"><button class="btn g" onclick="fechar()">Cancelar</button>
+  <div class="acts fim">${temPg(c,pg.F)?`<button class="btn g" onclick="desfazPg('${c.id}','${pg.F}')">Desfazer o último</button>`:`<button class="btn g" onclick="fechar()">Cancelar</button>`}
   <button class="btn" onclick="confirmaPg()">Confirmar</button></div>`);
 }
 function confirmaPg(){
   lePagar();
-  const c=cartao(pg.cid);
-  cfg.faturasPagas[pagaKey(c,pg.F)]={c:pg.conta,d:pg.data||vencISO(c,pg.F)};
+  const c=cartao(pg.cid), K=pagaKey(c,pg.F);
+  if(!(pg.v>0.004))return toast('Informe quanto vai pagar');
+  const ps=pgsFat(c,pg.F).filter(x=>x.v!=null);
+  ps.push({c:pg.conta,d:pg.data||vencISO(c,pg.F),v:r2(pg.v)});
+  cfg.faturasPagas[K]=ps;
   // já descontado pelo banco: compensa no ponto de partida para o saldo não cair de novo
   if(pg.manter){const k=conta(pg.conta); if(k)k.saldo=r2((+k.saldo||0)+pg.v)}
-  pg=null;salvarCfg();fechar();toast('Fatura paga, limite liberado');
+  const quitou=paga(c,pg.F);
+  pg=null;salvarCfg();fechar();render();
+  toast(quitou?'Fatura paga, limite liberado':'Amortizado, limite liberado em parte');
 }
 
 /* ---------- investimentos ---------- */
